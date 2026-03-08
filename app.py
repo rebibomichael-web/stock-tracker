@@ -544,9 +544,10 @@ setInterval(() => { loadTracker(); loadLeap(); }, 1800000);
 def index():
     return render_template_string(HTML)
 
+import os
+
+threading.Thread(target=background_refresh, daemon=True).start()
+
 if __name__ == '__main__':
-    # Initial data load in background
-    threading.Thread(target=background_refresh, daemon=True).start()
-  import os
-port = int(os.environ.get('PORT', 10000))
-app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
