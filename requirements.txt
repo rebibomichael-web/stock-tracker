@@ -1,9 +1,7 @@
-services:
-  - type: web
-    name: stock-tracker
-    runtime: python3
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:10000
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+flask==3.0.0
+yfinance==0.2.36
+pandas==2.1.4
+numpy==1.26.4
+requests==2.31.0
+beautifulsoup4==4.12.2
+gunicorn==21.2.0
