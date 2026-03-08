@@ -195,11 +195,11 @@ def refresh_tracker():
     for ticker in TICKERS:
         try:
             stock = yf.Ticker(ticker)
-            hist  = stock.history(period="1d")
+            hist  = stock.history(period="2d")
             if len(hist) == 0:
                 continue
             price    = round(hist['Close'].iloc[-1], 2)
-            prev     = stock.info.get('previousClose', price)
+            prev     = round(hist['Close'].iloc[-2], 2) if len(hist) > 1 else price
             chg_pct  = round(((price - prev) / prev) * 100, 2)
             s3, s2, s1, r1, r2, r3 = calc_pivots_correct(ticker)
             levels = [(s3,'s3'),(s2,'s2'),(s1,'s1'),(r1,'r1'),(r2,'r2'),(r3,'r3')]
@@ -208,8 +208,11 @@ def refresh_tracker():
             above  = [(l,n) for l,n in valid if l > price]
             below_lvl = max(below, key=lambda x: x[0])[1] if below else (min(valid, key=lambda x: x[0])[1] if valid else None)
             above_lvl = min(above, key=lambda x: x[0])[1] if above else (max(valid, key=lambda x: x[0])[1] if valid else None)
-            opinion, strength, direction, yesterday, last_week, last_month = get_barchart(ticker)
-            time.sleep(2)
+            try:
+                opinion, strength, direction, yesterday, last_week, last_month = get_barchart(ticker)
+                time.sleep(1)
+            except:
+                opinion = strength = direction = yesterday = last_week = last_month = 'N/A'
             rows.append({
                 'ticker': ticker, 'price': price, 'chg_pct': chg_pct,
                 's3': s3, 's2': s2, 's1': s1, 'r1': r1, 'r2': r2, 'r3': r3,
@@ -218,6 +221,9 @@ def refresh_tracker():
                 'yesterday': yesterday, 'last_week': last_week, 'last_month': last_month,
                 'updated': datetime.now().strftime("%H:%M:%S")
             })
+            # Update cache after each ticker so page shows partial data
+            cache['tracker'] = rows.copy()
+            cache['tracker_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         except Exception as e:
             print(f"Tracker error {ticker}: {e}")
     cache['tracker'] = rows
@@ -423,7 +429,11 @@ function rowClass(sig, score) {
 function loadTracker() {
   fetch('/api/tracker').then(r => r.json()).then(d => {
     const body = document.getElementById('tracker-body');
-    if (!d.data.length) { body.innerHTML = '<tr><td colspan="16" class="loading">Loading...</td></tr>'; return; }
+    if (!d.data.length) {
+      body.innerHTML = '<tr><td colspan="16" class="loading">⏳ Fetching stock data... refreshing every 5 seconds</td></tr>';
+      setTimeout(loadTracker, 5000);
+      return;
+    }
     body.innerHTML = d.data.map((r, i) => {
       const chgClass = r.chg_pct >= 0 ? 'pos' : 'neg';
       const rowCls = i % 2 === 0 ? 'even' : 'odd';
@@ -444,6 +454,8 @@ function loadTracker() {
       </tr>`;
     }).join('');
     document.getElementById('status').textContent = 'Updated: ' + d.updated;
+    // Keep polling if not all tickers loaded yet
+    if (d.data.length < 16) setTimeout(loadTracker, 5000);
   });
 }
 
