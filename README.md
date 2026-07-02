@@ -4,6 +4,20 @@
 - `app.py` — the full web app (Flask)
 - `requirements.txt` — Python packages needed
 - `render.yaml` — Render deployment config
+- `swing/module.py` — web module for a future **Swing tab** (not yet wired into
+  app.py). Reads the desktop swing platform's signal log
+  (`~/.michael_swing_signals.json`), so it only shows data when the app runs
+  locally; on Render it returns nothing.
+- `journal/module.py` — web module for a future **Journal tab** (not yet wired
+  into app.py). Depends on `journal/fidelity.py` (the Fidelity CSV parser,
+  to be lifted from the desktop `trade_journal.py`) which is **not in this repo
+  yet** — until it lands, the module safely returns no rows. Like the swing
+  module, it reads local files, so it's local-run only.
+
+These two modules were recovered on 2026-07-02 from the trading project's
+download triage (they had been misfiled there by a sync script; see
+`trading-src`'s `PROJECT_MAP.md`). Neither is imported by `app.py`, so they
+have zero effect on the deployed Render app.
 
 ## How to deploy on Render (free)
 
