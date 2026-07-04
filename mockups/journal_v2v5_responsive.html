@@ -1283,6 +1283,8 @@ function loadJournals() {
   // ── render everything from selected date ──────────────
   function renderAll() {
     const day = JOURNALS[selected];
+    const tipEl = document.getElementById("tip");
+    if (tipEl) tipEl.style.display = "none";
     renderHeader(day);
     renderMarket(day);
     renderHeatmap(day);
