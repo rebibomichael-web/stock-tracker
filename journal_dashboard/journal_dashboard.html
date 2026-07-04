@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journal Dashboard — V2+V5 Responsive</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  button, input { font: inherit; }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .spark { display: block; margin-top: 2px; }
+  .tblwrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     DESKTOP SKIN — V2 "Finviz Light"  (>= 720px)
+     ═══════════════════════════════════════════════════════════════════ */
+  @media (min-width: 720px) {
+    .mob-only { display: none !important; }
+
+    html, body { background: #ffffff; color: #222; }
+    body {
+      font-family: Arial, Verdana, Helvetica, sans-serif;
+      font-size: 12.5px; line-height: 1.45;
+      padding: 10px 12px 30px;
+    }
+    .wrap { max-width: 1520px; margin: 0 auto; }
+
+    /* header */
+    .topbar { max-width: 1520px; margin: 0 auto 8px; border: 1px solid #d9d9d9; background: #fff; }
+    .topbar-inner { padding: 9px 12px; }
+    .titlerow { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+    .titlerow h1 { font-size: 17px; font-weight: bold; color: #1a1a1a; white-space: nowrap; }
+    .badge-mock {
+      font-size: 10px; font-weight: bold; letter-spacing: .4px;
+      background: #fff7df; color: #7a5b00; border: 1px solid #e3c96e;
+      padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    }
+    .badge-mock.live { background: #e2f4de; color: #1e5c2a; border-color: #9dc793; }
+    .datectl { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+    .datectl button {
+      font-weight: bold; cursor: pointer;
+      background: #f4f4f4; color: #333; border: 1px solid #c9c9c9;
+      padding: 3px 10px; border-radius: 2px;
+    }
+    .datectl button:hover:not(:disabled) { background: #e8eef7; border-color: #4a86c8; }
+    .datectl button:disabled { opacity: .35; cursor: default; }
+    .datectl input[type="date"] {
+      border: 1px solid #c9c9c9; padding: 2px 6px; border-radius: 2px;
+      color: #222; background: #fff;
+    }
+    .daylabel { font-weight: bold; color: #1a1a1a; white-space: nowrap; }
+    .daysession { color: #777; font-size: 11.5px; white-space: nowrap; }
+
+    /* market strip */
+    .ctxline {
+      border: 1px solid #d9d9d9; border-bottom: none;
+      background: #f4f4f4; color: #333;
+      padding: 5px 10px; font-size: 12px;
+    }
+    .idxwrap { margin-bottom: 10px; }
+    .mstrip { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid #d9d9d9; background: #fff; }
+    .mtile {
+      flex: 1 1 130px; min-width: 128px;
+      border-right: 1px solid #e4e4e4; border-top: 1px solid #e4e4e4;
+      padding: 6px 9px 5px;
+    }
+    .mtile:last-child { border-right: none; }
+    .mtile .mn { font-size: 11px; color: #666; white-space: nowrap; }
+    .mtile .mv { font-size: 13.5px; font-weight: bold; color: #111; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mtile .mc { font-size: 11.5px; font-weight: bold; font-variant-numeric: tabular-nums; }
+    .mtile .mnote { font-size: 10.5px; color: #777; margin-left: 4px; font-weight: normal; }
+    .up   { color: #1e7a1e; }
+    .down { color: #c0392b; }
+    .flat { color: #777; }
+
+    /* sections — <details> styled as V2 boxes; not collapsible on desktop */
+    details.sec { border: 1px solid #d9d9d9; margin-bottom: 10px; background: #fff; }
+    details.sec > summary {
+      background: #f4f4f4; border-bottom: 1px solid #d9d9d9;
+      padding: 5px 10px; font-size: 12px; font-weight: bold; color: #222;
+      display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline;
+      pointer-events: none; cursor: default;
+    }
+    summary .emo { display: none; }
+    summary .t-mob { display: none; }
+    .sec-sub { font-weight: normal; color: #777; font-size: 11px; }
+    .sec-body { padding: 8px 10px 10px; }
+    .sub-title {
+      background: #f4f4f4; border-top: 1px solid #d9d9d9; border-bottom: 1px solid #d9d9d9;
+      padding: 5px 10px; font-size: 12px; font-weight: bold; color: #222;
+      margin: 10px -10px 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline;
+    }
+
+    /* heatmap */
+    .hm-grouplabel { font-size: 11px; font-weight: bold; color: #555; margin: 2px 0 4px; letter-spacing: .3px; text-transform: uppercase; }
+    .hm-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .tile {
+      display: flex; flex-direction: column; justify-content: center;
+      width: var(--w, 68px); height: 54px; padding: 3px 6px; border-radius: 2px;
+      border: 1px solid rgba(0,0,0,.12);
+      background: var(--bgl); color: var(--fgl);
+      cursor: default; position: relative; overflow: hidden;
+    }
+    .tile .trow { display: flex; align-items: baseline; gap: 4px; }
+    .tile .tk { font-weight: bold; font-size: 12.5px; letter-spacing: .2px; }
+    .tile .tchg { font-size: 11.5px; font-weight: bold; font-variant-numeric: tabular-nums; }
+    .tile .trow .tchg { margin-left: auto; }
+    .tile .tprice { font-size: 10px; opacity: .85; font-variant-numeric: tabular-nums; }
+    .tile .leapb {
+      margin-left: auto; font-size: 9.5px; font-weight: bold;
+      background: rgba(255,255,255,.82); color: #333;
+      border: 1px solid rgba(0,0,0,.15);
+      padding: 0 4px; border-radius: 2px; line-height: 14px;
+    }
+    .excl-strip { border: 1px dashed #bbb; background: #fafafa; padding: 6px 8px 2px; margin-bottom: 8px; }
+    .tile.excl {
+      background: repeating-linear-gradient(45deg, #ececec 0 6px, #e2e2e2 6px 12px);
+      color: #555; height: 58px;
+    }
+    .tile.excl .treason { font-size: 9.5px; color: #8a6d1a; font-style: italic; line-height: 1.2; }
+    .tile.cry { height: 48px; }
+    .hm-legend { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: #777; margin-top: 2px; flex-wrap: wrap; }
+    .hm-ramp { display: inline-block; width: 130px; height: 9px; border: 1px solid #ccc;
+      background: linear-gradient(90deg, #d64545, #f4cccc 46%, #eceae6 50%, #cdeacc 54%, #59a14f); }
+
+    /* tooltip (desktop hover) */
+    #tip {
+      position: fixed; display: none; z-index: 90; pointer-events: none;
+      background: #fff; border: 1px solid #999; box-shadow: 2px 3px 8px rgba(0,0,0,.22);
+      padding: 6px 9px; font-size: 11.5px; color: #222; max-width: 260px;
+    }
+    #tip b { font-size: 12.5px; }
+    #tip .tr { color: #8a6d1a; font-style: italic; }
+
+    /* tables */
+    table { font-size: 12px; }
+    th {
+      background: #4a86c8; color: #fff; font-weight: bold; text-align: left;
+      padding: 4px 8px; border: 1px solid #3a6ea8; font-size: 11.5px;
+    }
+    td { padding: 4px 8px; border: 1px solid #e0e0e0; }
+    tbody tr:nth-child(even) { background: #fbfbfb; }
+    tr.tint1 { background: #ddefd7 !important; }
+    tr.tint2 { background: #e8f4e2 !important; }
+    tr.tint3 { background: #f2f9ee !important; }
+    tr.row-act   { background: #fdeceb !important; }
+    tr.row-buy   { background: #edf7e8 !important; }
+    tr.row-watch { background: #fff !important; }
+    td.num { text-align: right; }
+    .tk-cell { font-weight: bold; color: #1a1a1a; }
+    .small-sub { font-size: 10.5px; color: #888; }
+
+    .sigb {
+      display: inline-block; font-size: 10px; font-weight: bold; letter-spacing: .3px;
+      padding: 1px 6px; border-radius: 2px; border: 1px solid transparent;
+    }
+    .sig-s3     { background: #d64545; color: #fff; }
+    .sig-s2     { background: #fdeecd; color: #7a4b00; border-color: #e0b45f; }
+    .sig-strong { background: #d9edd3; color: #1e5c2a; border-color: #9dc793; }
+    .sig-mon    { background: #efefef; color: #666; border-color: #d5d5d5; }
+    .sig-act    { background: #b93a3a; color: #fff; }
+    .sig-buy    { background: #3f7d38; color: #fff; }
+    .sig-watch  { background: #efefef; color: #555; border-color: #d5d5d5; }
+
+    .minibar { display: inline-block; vertical-align: middle; width: 42px; height: 7px;
+      background: #e8e8e8; border: 1px solid #ccc; margin-left: 6px; }
+    .minibar i { display: block; height: 100%; background: #4a86c8; }
+
+    /* ACT NOW cards (V2: flame banner) */
+    .an-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+    .an-card { border: 1px solid #d9d9d9; background: #fff; }
+    .an-flame {
+      background: linear-gradient(90deg, #c0392b, #d64545);
+      color: #fff; font-weight: bold; font-size: 12px;
+      padding: 5px 9px; letter-spacing: .3px;
+      display: flex; flex-wrap: wrap; gap: 0 5px; align-items: baseline;
+    }
+    .an-flame .an-tk::before, .an-flame .an-score::before, .an-flame .an-px::before { content: "— "; font-weight: normal; }
+    .an-flame .rsi::before { content: "— "; font-weight: normal; }
+    .an-flame .rsi { margin-left: 5px; }
+    .an-buyhdr {
+      background: #e7f4e2; color: #1e5c2a; font-weight: bold; font-size: 12.5px;
+      border-top: 1px solid #b9d8b0; border-bottom: 1px solid #cfe5c8;
+      padding: 4px 9px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    }
+    .an-buyhdr .asof { font-weight: normal; color: #557a55; font-size: 11px; }
+    .an-body { padding: 6px 9px 8px; }
+    .an-rows { display: flex; flex-direction: column; }
+    .an-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+      padding: 2px 0; border-bottom: 1px dotted #e6e6e6; font-variant-numeric: tabular-nums; }
+    .an-row:last-of-type { border-bottom: none; }
+    .an-row .lbl { color: #777; }
+    .an-row .big { font-weight: bold; color: #222; margin-left: auto; }
+    .an-row .sub { color: #777; font-size: 11px; }
+    .an-row.stop .big, .an-row.stop .sub { color: #c0392b; }
+    .an-row.tgt .big,  .an-row.tgt .sub  { color: #1e7a1e; }
+    .an-theme {
+      margin-top: 6px; padding: 5px 8px; background: #f7f7f7; border: 1px solid #e6e6e6;
+      font-size: 11.5px; color: #444;
+    }
+    .an-theme b { color: #222; }
+
+    /* positions — compact accordion list */
+    .pos-item { border: 1px solid #ddd; background: #fff; margin-bottom: 6px; }
+    .pos-row {
+      display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+      background: #fff; border: none; cursor: pointer; padding: 6px 10px;
+    }
+    .pos-row:hover { background: #f2f7fd; }
+    .pr-l1 { display: flex; align-items: center; gap: 8px; flex: 0 0 290px; }
+    .pr-l2 { display: flex; align-items: center; gap: 16px; flex: 1; justify-content: flex-end; flex-wrap: wrap; }
+    .pos-tk { font-weight: bold; font-size: 13.5px; color: #1a1a1a; min-width: 52px; }
+    .chip {
+      font-size: 10px; font-weight: bold; padding: 1px 7px; border-radius: 9px;
+      border: 1px solid transparent; white-space: nowrap;
+    }
+    .chip.good { background: #d9edd3; color: #1e5c2a; border-color: #9dc793; }
+    .chip.bad  { background: #f8d7d4; color: #8b1e1e; border-color: #dc9a94; }
+    .chip.warn { background: #fdeecd; color: #7a4b00; border-color: #e0b45f; }
+    .pos-days { color: #888; font-size: 11px; white-space: nowrap; margin-left: auto; }
+    .pos-move { font-variant-numeric: tabular-nums; font-size: 12px; color: #333; white-space: nowrap; }
+    .pos-move .pct { font-weight: bold; }
+    .pos-mom { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; white-space: nowrap; }
+    .meter { display: inline-flex; gap: 2px; }
+    .meter i { width: 13px; height: 8px; background: #e4e4e4; border: 1px solid #cfcfcf; display: block; }
+    .meter i.on { background: #59a14f; border-color: #468040; }
+    .caret { width: 7px; height: 7px; flex: none; margin-left: 4px;
+      border-right: 2px solid #999; border-bottom: 2px solid #999;
+      transform: rotate(45deg); transition: transform .18s ease; }
+    .pos-item.open .caret { transform: rotate(-135deg); }
+    .pos-detail { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+    .pos-item.open .pos-detail { max-height: 420px; }
+    .pd-in { padding: 4px 10px 9px; border-top: 1px solid #eee; }
+    .mompb { font-size: 11px; color: #666; margin: 5px 0 6px; font-variant-numeric: tabular-nums; }
+    .mompb b { color: #222; }
+    .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 5px; }
+    .chk { background: #fafafa; border: 1px solid #e6e6e6; border-radius: 3px; padding: 4px 7px; }
+    .chk .k { font-size: 11px; font-weight: bold; color: #333; }
+    .chk .k .ic { font-weight: bold; margin-right: 4px; }
+    .chk.ok .ic { color: #1e7a1e; }
+    .chk.no .ic { color: #c0392b; }
+    .chk .v { font-size: 10.5px; color: #777; line-height: 1.3; }
+
+    .chk.na .ic { color: #999; }
+    .stale-w { color: #b8860b; cursor: help; }
+    .empty { color: #999; font-size: 11.5px; padding: 4px 2px; }
+
+    footer { margin-top: 14px; color: #999; font-size: 11px; text-align: center; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     MOBILE SKIN — V5 "Mobile Compact"  (< 720px)
+     ═══════════════════════════════════════════════════════════════════ */
+  @media (max-width: 719.98px) {
+    .desk-only { display: none !important; }
+
+    html, body { background: #111418; color: #e8eaf0; }
+    body {
+      font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden; padding: 0;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 0 12px 8px; display: flex; flex-direction: column; }
+
+    /* V5 section order: indexes, Act Now, Heatmap, LEAPs, Positions, Flags */
+    .ctxline  { order: 0; display: none; }   /* context shown in topbar on mobile */
+    .idxwrap  { order: 1; }
+    #sec-act  { order: 2; }
+    #sec-heat { order: 3; }
+    #sec-leaps{ order: 4; }
+    #sec-pos  { order: 5; }
+    #sec-over { order: 6; }
+    footer    { order: 7; }
+
+    /* sticky top bar */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(17,20,24,.96);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid #262c36;
+    }
+    .topbar-inner { max-width: 560px; margin: 0 auto; padding: 10px 12px 8px; }
+    .titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .titlerow h1 { font-size: 17px; font-weight: 700; letter-spacing: .2px; }
+    .badge-mock {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+      color: #f3c96b; border: 1px solid #5a4a22; background: #241d0e;
+      padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+    }
+    .datechips { display: flex; gap: 8px; margin-top: 8px; }
+    .dchip {
+      flex: 1 1 0; min-height: 46px; border-radius: 11px;
+      border: 1px solid #2a303c; background: #1b1f27; color: #c6cdd9;
+      cursor: pointer; padding: 5px 4px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .dchip .wk { font-size: 10px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: #8b93a3; }
+    .dchip .md { font-size: 14px; font-weight: 700; }
+    .dchip[aria-pressed="true"] { background: #2b3546; border-color: #4a6ea8; color: #eef3fb; }
+    .dchip[aria-pressed="true"] .wk { color: #9db8dd; }
+    .ctxline-m { margin-top: 7px; font-size: 10.5px; line-height: 1.45; color: #9aa3b2; }
+    .ctxline-m .sess { color: #d7dce6; font-weight: 600; }
+
+    /* index strip */
+    .idxwrap { overflow-x: auto; margin: 10px -12px 0; padding: 0 12px 6px; scrollbar-width: thin; }
+    .mstrip { display: flex; gap: 8px; width: max-content; }
+    .mtile {
+      background: #1b1f27; border: 1px solid #262c36; border-radius: 10px;
+      padding: 6px 10px; min-width: 96px;
+    }
+    .mtile .mn { font-size: 9.5px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: #8b93a3; white-space: nowrap; }
+    .mtile .mv { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mtile .mc { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mtile .mnote { color: #8b93a3; margin-left: 4px; }
+    .spark { display: none; }
+    .up   { color: #5fd38d; }
+    .down { color: #ff8280; }
+    .flat { color: #9aa3b2; }
+
+    /* collapsible sections */
+    details.sec { margin-top: 12px; background: #1b1f27; border: 1px solid #262c36; border-radius: 12px; }
+    details.sec > summary {
+      cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 7px;
+      min-height: 48px; padding: 10px 14px;
+      font-size: 15px; font-weight: 700;
+      -webkit-tap-highlight-color: transparent;
+    }
+    details.sec > summary::after {
+      content: ""; margin-left: auto; width: 8px; height: 8px; flex: none;
+      border-right: 2px solid #7d8595; border-bottom: 2px solid #7d8595;
+      transform: rotate(45deg); transition: transform .15s ease;
+    }
+    details.sec[open] > summary::after { transform: rotate(-135deg); }
+    summary .t-desk { display: none; }
+    summary .sec-sub.desk-only { display: none; }
+    summary .cnt { color: #8b93a3; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .sec-body { padding: 2px 12px 14px; border-top: 1px solid #232935; }
+    .sub-title { margin: 12px 2px 0; font-size: 12.5px; font-weight: 700; color: #d7dce6; }
+    .sub-title .sec-sub { font-size: 10.5px; font-weight: 600; color: #8b93a3; }
+
+    /* heatmap: 3-across grid */
+    .hm-grouplabel { margin: 12px 2px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #8b93a3; }
+    .hm-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .tile {
+      border-radius: 9px; padding: 8px 8px 7px; min-height: 56px; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: center; gap: 1px;
+      border: 1px solid rgba(255,255,255,.06);
+      background: var(--bgd); color: #fff;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tile .trow { display: flex; align-items: center; gap: 4px; }
+    .tile .tk { font-size: 13px; font-weight: 800; letter-spacing: .3px; color: #fff; }
+    .tile .leapb {
+      margin-left: auto; font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums;
+      color: #ffffff; background: rgba(0,0,0,.34); border: 1px solid rgba(255,255,255,.25);
+      border-radius: 999px; padding: 1px 5px; white-space: nowrap;
+    }
+    .tile .tchg { font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.92); }
+    .tile .trow .tchg { margin-left: auto; }
+    .tile.excl { opacity: .62; border-style: dashed; border-color: rgba(255,255,255,.18); }
+    .tile .treason { font-size: 10px; line-height: 1.25; color: rgba(255,255,255,.75); }
+    .tile .tprice { font-size: 10px; color: rgba(255,255,255,.75); font-variant-numeric: tabular-nums; }
+    .excl-strip { border: none; background: transparent; padding: 0; margin: 0; }
+    .hm-legend { display: none; }
+    .hm-detail {
+      margin-top: 10px; font-size: 11.5px; color: #b9c1cf; background: #171b22;
+      border: 1px dashed #2c3340; border-radius: 8px; padding: 8px 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .hm-detail b { color: #eef1f7; }
+    #tip { display: none !important; }
+
+    /* tables: in-card scroll + sticky first column */
+    .tblwrap { overflow-x: auto; margin-top: 8px; border: 1px solid #232935; border-radius: 9px; }
+    table { min-width: 560px; font-size: 12px; }
+    th, td { text-align: right; padding: 7px 9px; border: none; border-bottom: 1px solid #232935; }
+    tr:last-child td { border-bottom: none; }
+    th { font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #8b93a3; background: #171b22; position: sticky; top: 0; }
+    th:first-child, td:first-child {
+      text-align: left; position: sticky; left: 0; z-index: 2;
+      font-weight: 800; background: #1b1f27;
+      border-right: 1px solid #2a303c;
+    }
+    th:first-child { background: #171b22; z-index: 3; }
+    td { color: #d7dce6; background: #1b1f27; }
+    tbody tr:nth-child(even) { background: transparent; }
+    td.cl, th.cl { text-align: left; }
+    .tk-cell { color: #eef1f7; }
+    .small-sub { font-size: 10px; color: #8b93a3; }
+    tr.row-act td { background: #2a2027; }
+    tr.row-act td:first-child { background: #2e222a; }
+    tr.row-buy td { background: #1e2620; }
+    tr.row-buy td:first-child { background: #212a24; }
+    .minibar { display: none; }
+
+    .sigb { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .4px; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    .sig-s3     { color: #ffd7d5; background: #4a1f1e; border: 1px solid #7c3230; }
+    .sig-s2     { color: #ffe1ad; background: #403010; border: 1px solid #6d5320; }
+    .sig-strong { color: #c9f4d9; background: #173425; border: 1px solid #2b5c3f; }
+    .sig-mon    { color: #aab2c0; background: #242a34; border: 1px solid #333c4a; }
+    .sig-act    { color: #ffd9c9; background: #48231a; border: 1px solid #8a4630; }
+    .sig-buy    { color: #c9f4d9; background: #173425; border: 1px solid #2b5c3f; }
+    .sig-watch  { color: #aab2c0; background: #242a34; border: 1px solid #333c4a; }
+
+    /* ACT NOW cards (V5) */
+    .an-grid { display: block; }
+    .an-card { background: #20242e; border: 1px solid #3d3030; border-left: 3px solid #e0705a; border-radius: 10px; padding: 12px 12px 11px; margin-top: 10px; }
+    .an-flame { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .an-flame .fl-pre { display: none; }
+    .an-tk { font-size: 19px; font-weight: 800; letter-spacing: .3px; }
+    .an-score { font-size: 11px; font-weight: 800; color: #ffb199; background: #3a231d; border: 1px solid #5c352a; border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+    .an-px { margin-left: auto; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .an-px .rsi { font-size: 11px; font-weight: 600; color: #9aa3b2; margin-left: 6px; }
+    .an-meta { margin-top: 3px; font-size: 10.5px; color: #8b93a3; }
+    .an-meta b { color: #c6cdd9; font-weight: 600; }
+    .an-rows { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; }
+    .an-row {
+      display: flex; align-items: baseline; gap: 8px;
+      background: #191d25; border-radius: 8px; padding: 8px 10px; min-height: 40px;
+    }
+    .an-row .lbl { flex: 0 0 76px; font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #8b93a3; }
+    .an-row .big { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .an-row .sub { margin-left: auto; font-size: 11px; color: #9aa3b2; font-variant-numeric: tabular-nums; text-align: right; }
+    .an-row.stop .big, .an-row.stop .sub { color: #ff8280; }
+    .an-row.stop .lbl { color: #c96e6c; }
+    .an-row.tgt .big { color: #5fd38d; }
+    .an-theme { margin-top: 9px; font-size: 12px; line-height: 1.5; color: #b9c1cf; }
+    .an-theme b { color: #eef1f7; }
+
+    /* positions — compact accordion list (dark) */
+    .pos-item { background: #191d25; border: 1px solid #262c36; border-radius: 10px; margin-top: 9px; }
+    .pos-row {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: inherit; padding: 10px 11px; min-height: 48px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; position: relative;
+    }
+    .pr-l1 { display: flex; align-items: center; gap: 8px; padding-right: 18px; }
+    .pr-l2 { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+    .pos-tk { font-size: 15px; font-weight: 800; letter-spacing: .3px; }
+    .chip { font-size: 10px; font-weight: 800; letter-spacing: .4px; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+    .chip.good { color: #c9f4d9; background: #173425; border: 1px solid #2b5c3f; }
+    .chip.bad  { color: #ffd7d5; background: #4a1f1e; border: 1px solid #7c3230; }
+    .chip.warn { color: #ffe1ad; background: #403010; border: 1px solid #6d5320; }
+    .pos-days { margin-left: auto; color: #8b93a3; font-size: 11px; white-space: nowrap; }
+    .pos-move { font-size: 12px; color: #c6cdd9; font-variant-numeric: tabular-nums; }
+    .pos-move .pct { font-weight: 800; }
+    .pos-mom { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9aa3b2; font-variant-numeric: tabular-nums; }
+    .meter { display: inline-flex; gap: 3px; }
+    .meter i { width: 16px; height: 6px; border-radius: 2px; background: #2a303c; display: block; }
+    .meter.lv-hi  i.on { background: #3fbf77; }
+    .meter.lv-mid i.on { background: #e3b341; }
+    .meter.lv-lo  i.on { background: #e06c62; }
+    .caret { position: absolute; right: 13px; top: 20px; width: 8px; height: 8px;
+      border-right: 2px solid #7d8595; border-bottom: 2px solid #7d8595;
+      transform: rotate(45deg); transition: transform .18s ease; display: block; }
+    .pos-item.open .caret { transform: rotate(-135deg); }
+    .pos-detail { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+    .pos-item.open .pos-detail { max-height: 480px; }
+    .pd-in { padding: 2px 11px 11px; border-top: 1px solid #232935; }
+    .mompb { margin: 8px 0 7px; font-size: 11px; color: #9aa3b2; font-variant-numeric: tabular-nums; }
+    .mompb b { color: #d7dce6; }
+    .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .chk { background: #151920; border: 1px solid #232935; border-radius: 7px; padding: 5px 7px; }
+    .chk .k { font-size: 10.5px; font-weight: 700; }
+    .chk .k .ic { font-weight: 800; margin-right: 3px; }
+    .chk.ok .ic { color: #5fd38d; }
+    .chk.no .ic { color: #ff8280; }
+    .chk .v { font-size: 10px; color: #8b93a3; line-height: 1.3; }
+
+    .badge-mock.live { color: #7fe0a0; border-color: #2b5c3f; background: #10241a; }
+    .datechips { overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .dchip { flex: 1 0 64px; }
+    .chk.na .ic { color: #8b93a3; }
+    .stale-w { color: #e3b341; cursor: help; }
+    .empty { color: #8b93a3; font-size: 12px; padding: 6px 2px; }
+
+    footer { margin: 20px auto 0; padding: 0 12px 26px; font-size: 10.5px; color: #6b7482; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="titlerow">
+      <h1>📓 Journal Dashboard</h1>
+      <span class="badge-mock" id="srcBadge">MOCKUP · SAMPLE DATA</span>
+      <div class="datectl desk-only">
+        <button id="btnPrev" title="Previous day" aria-label="Previous day">◀</button>
+        <input type="date" id="datePick">
+        <button id="btnNext" title="Next day" aria-label="Next day">▶</button>
+        <span class="daylabel" id="dayLabel"></span>
+        <span class="daysession" id="daySession"></span>
+      </div>
+    </div>
+    <div class="datechips mob-only" id="dateChips" role="group" aria-label="Journal date"></div>
+    <div class="ctxline-m mob-only" id="ctxLineM"></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="ctxline desk-only" id="ctxLine"></div>
+  <div class="idxwrap" id="idxWrap"><div class="mstrip" id="mStrip"></div></div>
+
+  <details class="sec" id="sec-heat" open>
+    <summary>
+      <span class="emo">🗺</span>
+      <span class="t-desk">Journal Heatmap</span>
+      <span class="t-mob">Heatmap</span>
+      <span class="cnt mob-only" id="heatCnt"></span>
+      <span class="sec-sub desk-only">all journal stocks · color = % change today · tile width = LEAP score (scored tiles)</span>
+    </summary>
+    <div class="sec-body">
+      <div class="hm-grouplabel" id="hmActLbl"></div>
+      <div class="hm-row" id="hmActive"></div>
+      <div class="excl-strip" id="exclStrip">
+        <div class="hm-grouplabel" id="hmExcLbl"></div>
+        <div class="hm-row" id="hmExcl"></div>
+      </div>
+      <div class="hm-grouplabel" id="hmCryLbl"></div>
+      <div class="hm-row crypto" id="hmCrypto"></div>
+      <div class="hm-legend desk-only">
+        <span>-5%</span><span class="hm-ramp"></span><span>+5%</span>
+        <span>· gray = flat (|chg| &lt; 0.15%)</span>
+        <span>· hover a tile for details</span>
+      </div>
+      <div class="hm-detail mob-only" id="hmDetail">Tap a tile for price · % change · LEAP score · reason</div>
+    </div>
+  </details>
+
+  <details class="sec" id="sec-leaps" open>
+    <summary>
+      <span class="emo">🎯</span>
+      <span class="t-desk">Top 3 LEAPs — Original Scan</span>
+      <span class="t-mob">LEAPs</span>
+      <span class="cnt mob-only" id="leapCnt"></span>
+      <span class="sec-sub desk-only" id="leapOrigSub"></span>
+    </summary>
+    <div class="sec-body">
+      <div class="sub-title mob-only">Top 3 LEAPs — Original Scan</div>
+      <div id="leapOrig"></div>
+      <div class="sub-title" id="leapExcTitle"></div>
+      <div id="leapExc"></div>
+    </div>
+  </details>
+
+  <details class="sec" id="sec-act" open>
+    <summary>
+      <span class="emo">🔥</span>
+      <span class="t-desk">Swing Trader — ACT NOW</span>
+      <span class="t-mob">Act Now</span>
+      <span class="cnt mob-only" id="anCnt"></span>
+      <span class="sec-sub desk-only" id="anSub"></span>
+    </summary>
+    <div class="sec-body"><div class="an-grid" id="anGrid"></div></div>
+  </details>
+
+  <details class="sec" id="sec-pos" open>
+    <summary>
+      <span class="emo">📟</span>
+      <span class="t-desk">Open Position Alerts</span>
+      <span class="t-mob">Positions</span>
+      <span class="cnt mob-only" id="posCnt"></span>
+      <span class="sec-sub desk-only" id="posSub"></span>
+    </summary>
+    <div class="sec-body"><div id="posList"></div></div>
+  </details>
+
+  <details class="sec" id="sec-over" open>
+    <summary>
+      <span class="emo">🚩</span>
+      <span class="t-desk">All Flags — Final Score &gt; 75</span>
+      <span class="t-mob">Flags &gt; 75</span>
+      <span class="cnt mob-only" id="o75Cnt"></span>
+      <span class="sec-sub desk-only" id="o75Sub"></span>
+    </summary>
+    <div class="sec-body" id="o75"></div>
+  </details>
+
+  <footer id="foot">Journal Dashboard — desktop = Finviz Light · phone = Mobile Compact · static sample data (journal_data.js not found)</footer>
+</div>
+
+<div id="tip"></div>
+
+<script src="journal_data.js"></script>
+<script>
+// ── DATA CONTRACT ──────────────────────────────────────────────────────────
+// JOURNALS shape (what window.SWING_JOURNALS / journal_data.js must provide).
+// Full schema: CONTRACT.md. Summary of renderer tolerances:
+//   { "<YYYY-MM-DD>": {                        // 1..30 date keys
+//       label: string, session: string,
+//       market: { context: string,
+//                 indexes: [{ name, value, chg:number|null, note? }] },  // [] => strip hidden
+//       heatmap: [{ t, price, chg:number|null,          // null chg => neutral gray, "—"
+//                   leap:number|null, leapMax?:number,  // leapMax/leaps.max drive "/N"
+//                   group:"active"|"excluded"|"crypto", reason?:string|null }],
+//                                                       // empty group => block hidden
+//       leaps: { max: number,                  // score denominator (never hardcode 15)
+//                origTopScore: number,
+//                original:  [LEAP_ROW], exceeders: [LEAP_ROW] },
+//         // LEAP_ROW = { t, price, chg:number|null, premium, strike, exp, dte, score,
+//         //              signal, rev:"✅ confirmed"|"❌ not confirmed"|"—",
+//         //              stale:bool }          // stale => ⚠ marker on premium
+//       swing: {
+//         actNow:    [{ t, score, price, rsi, asOf, entry, maxChase, stop, stopPct,
+//                       stopPerShare, t1, t1Pct, rr1, t2, t2Pct, rr2, hold, hardStop,
+//                       theme, note }],         // theme/note "" => note block hidden
+//         over75:    [{ t, price, rsi, tech, bt, final, swingPct:number|null,
+//                       arb:number|null, signal, opinion }],       // null => "—"
+//         positions: [{ t, status, statusKind:"good"|"bad"|"warn", entry, cur, pct, days,
+//                       momentum:0-4|null, momPerBar,   // null => meter hidden, text only
+//                       checks: [{ k, v, ok:true|false|null }] }]  // null => neutral "•"
+//       },
+//       meta: { source:"live"|"sample", generated: string }
+//         // "live" (or window.SWING_JOURNALS present) => green LIVE badge + live footer
+//   } }
+//   } }
+const JOURNALS_SAMPLE = {
+  "2026-07-03": {
+    label: "Thu, Jul 3 2026",
+    session: "Pre-market (opens 9:30 AM ET)",
+    market: {
+      context: "VIX 15.9 ↓ from 18.4 (-14% wk) — ☺ Neutral | Normal conditions. Standard sizing.",
+      indexes: [
+        { name: "Dow Jones", value: "52,900.07", chg: 1.14 },
+        { name: "Nasdaq",    value: "25,832.67", chg: -0.80 },
+        { name: "S&P 500",   value: "7,483.24",  chg: 0.00 },
+        { name: "VIX",       value: "15.90",     chg: -1.55, note: "☺ Neutral" },
+        { name: "Bitcoin",   value: "$61,673.76", chg: 0.31 },
+        { name: "Ethereum",  value: "$1,715.28",  chg: 1.01 },
+        { name: "Kaspa",     value: "$0.0308",    chg: -0.42 }
+      ]
+    },
+    // Heatmap: every stock in the day's journal. group: active | excluded | crypto.
+    // leap = LEAP score /15 when the stock was scored that day, else null.
+    heatmap: [
+      { t: "CRWD", price: 471.10, chg: 0.41,  leap: null, group: "active" },
+      { t: "ORCL", price: 140.27, chg: -1.56, leap: 11, leapMax: 15,   group: "active" },
+      { t: "SNOW", price: 198.45, chg: -0.40, leap: null, group: "active" },
+      { t: "SSYS", price: 8.14,   chg: -4.01, leap: 7, leapMax: 15,    group: "active" },
+      { t: "LMND", price: 42.87,  chg: 3.16,  leap: null, group: "active" },
+      { t: "PLTR", price: 148.62, chg: 2.84,  leap: null, group: "active" },
+      { t: "BMNR", price: 14.36,  chg: 1.48,  leap: 10, leapMax: 15,   group: "active" },
+      { t: "NVDA", price: 194.83, chg: -1.39, leap: 6, leapMax: 15,    group: "active" },
+      { t: "DE",   price: 512.30, chg: -1.01, leap: null, group: "active" },
+      { t: "SOFI", price: 21.44,  chg: -1.08, leap: null, group: "active" },
+      { t: "HOOD", price: 118.92, chg: 3.76,  leap: null, group: "active" },
+      { t: "NOW",  price: 106.32, chg: 0.49,  leap: 9, leapMax: 15,    group: "active" },
+      { t: "TSLA", price: 242.15, chg: -7.49, leap: null, group: "excluded", reason: "Earnings <14d" },
+      { t: "MU",   price: 132.60, chg: -5.49, leap: null, group: "excluded", reason: "Broke weekly S3" },
+      { t: "NVMI", price: 215.34, chg: -6.46, leap: null, group: "excluded", reason: "Low option liquidity" },
+      { t: "GRNY", price: 27.91,  chg: -0.40, leap: null, group: "excluded", reason: "Volume < 20d avg" },
+      { t: "BTC",  price: 61673.76, chg: 0.31, leap: null, group: "crypto" },
+      { t: "ETH",  price: 1715.28,  chg: 1.01, leap: null, group: "crypto" },
+      { t: "KAS",  price: 0.0308,   chg: -0.42, leap: null, group: "crypto" }
+    ],
+    leaps: {
+      // Top 3 from the day's ORIGINAL scan (the 16-ticker journal watchlist)
+      max: 15, origTopScore: 11,
+      original: [
+        { t: "ORCL", price: 140.27, chg: -1.56, premium: 18.45, strike: 150, exp: "2028-01-21", dte: 567, score: 11, signal: "STRONG SETUP", stale: false, rev: "↑ 56% Sell" },
+        { t: "BMNR", price: 14.36,  chg: 1.48,  premium: 3.10,  strike: 20,  exp: "2028-06-16", dte: 714, score: 10, signal: "STRONG SETUP", stale: false, rev: "—" },
+        { t: "NOW",  price: 106.32, chg: 0.49,  premium: 14.20, strike: 130, exp: "2028-01-21", dte: 567, score: 9,  signal: "MONITOR", stale: false,      rev: "↓ 40% Buy" }
+      ],
+      // FULL-market scan: every LEAP that beat the day's original top score (>11)
+      exceeders: [
+        { t: "MRVL", price: 61.42, chg: -2.31, premium: 9.85, strike: 95, exp: "2028-06-16", dte: 714, score: 13, signal: "S3 ALERT", stale: false,     rev: "↑ RSI divergence" },
+        { t: "INTC", price: 24.18, chg: 0.87,  premium: 4.12, strike: 35, exp: "2028-01-21", dte: 567, score: 12, signal: "STRONG SETUP", stale: false, rev: "—" },
+        { t: "PYPL", price: 58.90, chg: -1.12, premium: 8.40, strike: 93, exp: "2028-06-16", dte: 714, score: 12, signal: "STRONG SETUP", stale: false, rev: "↑ Hammer close" }
+      ]
+    },
+    swing: {
+      // ACT NOW cards: every symbol with Final score >= 85 today
+      actNow: [
+        { t: "MCHP", score: 93, price: 84.64, rsi: 40.8, asOf: "11:27:26",
+          entry: 84.64, maxChase: 85.06,
+          stop: 73.88, stopPct: -12.7, stopPerShare: -10.76,
+          t1: 95.40, t1Pct: 12.7, rr1: "1.0:1", t2: 100.79, t2Pct: 19.1, rr2: "1.5:1",
+          hold: "7-21d", hardStop: "Jul 24, 2026",
+          theme: "Technical Convergence", note: "Multiple weak-to-moderate signals adding up rather than one strong theme." },
+        { t: "T", score: 93, price: 20.58, rsi: 28.6, asOf: "11:27:31",
+          entry: 20.58, maxChase: 20.68,
+          stop: 19.02, stopPct: -7.6, stopPerShare: -1.56,
+          t1: 22.19, t1Pct: 7.8, rr1: "1.0:1", t2: 23.05, t2Pct: 12.0, rr2: "1.6:1",
+          hold: "7-21d", hardStop: "Jul 24, 2026",
+          theme: "Oversold Reversion", note: "RSI 28.6 deep oversold with strong backtest edge (+10) and 80 tech rank." },
+        { t: "F", score: 85, price: 13.36, rsi: 38.9, asOf: "11:27:35",
+          entry: 13.36, maxChase: 13.43,
+          stop: 12.32, stopPct: -7.8, stopPerShare: -1.04,
+          t1: 14.40, t1Pct: 7.8, rr1: "1.0:1", t2: 15.03, t2Pct: 12.5, rr2: "1.6:1",
+          hold: "7-21d", hardStop: "Jul 24, 2026",
+          theme: "Value Base Break", note: "Backtest +10 with improving tech; sizing standard per neutral VIX." },
+        { t: "ORCL", score: 85, price: 140.27, rsi: 26.7, asOf: "11:27:40",
+          entry: 140.27, maxChase: 140.97,
+          stop: 122.55, stopPct: -12.6, stopPerShare: -17.72,
+          t1: 157.99, t1Pct: 12.6, rr1: "1.0:1", t2: 166.85, t2Pct: 19.0, rr2: "1.5:1",
+          hold: "7-21d", hardStop: "Jul 24, 2026",
+          theme: "Oversold + LEAP Overlap", note: "RSI 26.7 washout; overlaps today's #1 LEAP setup (11/15) — double confirmation." }
+      ],
+      // Everything with Final score > 75 (the swing flags table)
+      over75: [
+        { t: "MCHP", price: 84.64,  rsi: 40.8, tech: 68, bt: "+10", final: 93, swingPct: 12.7, arb: -1.5, signal: "ACT NOW", opinion: "↓ 40% Buy" },
+        { t: "T",    price: 20.58,  rsi: 28.6, tech: 80, bt: "+10", final: 93, swingPct: 7.8,  arb: 0.2,  signal: "ACT NOW", opinion: "→ 88% Sell" },
+        { t: "F",    price: 13.36,  rsi: 38.9, tech: 68, bt: "+10", final: 85, swingPct: 7.8,  arb: -0.6, signal: "BUY",     opinion: "↓ 64% Buy" },
+        { t: "ORCL", price: 140.27, rsi: 26.7, tech: 89, bt: "+3",  final: 85, swingPct: 12.7, arb: -0.3, signal: "BUY",     opinion: "↑ 56% Sell" },
+        { t: "SLB",  price: 45.13,  rsi: 26.0, tech: 90, bt: "+0",  final: 82, swingPct: 6.3,  arb: 0.1,  signal: "BUY",     opinion: "↑ 24% Sell" },
+        { t: "GM",   price: 52.40,  rsi: 41.2, tech: 61, bt: "+5",  final: 78, swingPct: 6.1,  arb: -0.4, signal: "BUY",     opinion: "↓ 52% Buy" },
+        { t: "HAL",  price: 31.77,  rsi: 33.5, tech: 72, bt: "+2",  final: 76, swingPct: 5.4,  arb: 0.3,  signal: "WATCH",   opinion: "↑ 40% Buy" }
+      ],
+      // Open position alerts (flagged positions)
+      positions: [
+        { t: "REGN", status: "NEAR TP1", statusKind: "good", entry: 624.37, cur: 654.27, pct: 4.8,  days: 35, momentum: 1, momPerBar: "0.14%/bar",
+          checks: [
+            { k: "Speed",      v: "0.14%/bar (normal)",      ok: false },
+            { k: "Volume",     v: "1.0x avg (weak)",         ok: false },
+            { k: "Candle",     v: "81% body (conviction)",   ok: true },
+            { k: "Indicators", v: "RSI 60, MACD expanding",  ok: false }
+          ] },
+        { t: "GOOGL", status: "NEAR STOP", statusKind: "bad", entry: 371.19, cur: 359.91, pct: -3.0, days: 31, momentum: 0, momPerBar: "-0.10%/bar",
+          checks: [
+            { k: "Speed",      v: "-0.10%/bar (normal)",     ok: false },
+            { k: "Volume",     v: "0.7x avg (weak)",         ok: false },
+            { k: "Candle",     v: "4% body (indecisive)",    ok: false },
+            { k: "Indicators", v: "RSI 50, MACD expanding",  ok: false }
+          ] },
+        { t: "AA", status: "NEAR STOP", statusKind: "bad", entry: 63.27, cur: 48.68, pct: -23.1, days: 17, momentum: 0, momPerBar: "-1.36%/bar",
+          checks: [
+            { k: "Speed",      v: "-1.36%/bar (fast down)",  ok: false },
+            { k: "Volume",     v: "1.4x avg (heavy)",        ok: false },
+            { k: "Candle",     v: "62% body (bear conviction)", ok: false },
+            { k: "Indicators", v: "RSI 31, MACD falling",    ok: false }
+          ] },
+        { t: "AMD", status: "NEAR TP2", statusKind: "good", entry: 158.20, cur: 176.90, pct: 11.8, days: 28, momentum: 3, momPerBar: "0.42%/bar",
+          checks: [
+            { k: "Speed",      v: "0.42%/bar (strong)",      ok: true },
+            { k: "Volume",     v: "1.3x avg (confirming)",   ok: true },
+            { k: "Candle",     v: "74% body (conviction)",   ok: true },
+            { k: "Indicators", v: "RSI 68, MACD expanding",  ok: false }
+          ] },
+        { t: "CVX", status: "NEAR TP1", statusKind: "good", entry: 152.30, cur: 159.80, pct: 4.9,  days: 22, momentum: 2, momPerBar: "0.22%/bar",
+          checks: [
+            { k: "Speed",      v: "0.22%/bar (normal)",      ok: true },
+            { k: "Volume",     v: "1.1x avg (ok)",           ok: true },
+            { k: "Candle",     v: "38% body (mixed)",        ok: false },
+            { k: "Indicators", v: "RSI 58, MACD flat",       ok: false }
+          ] },
+        { t: "DAL", status: "NEAR STOP", statusKind: "bad", entry: 44.10, cur: 41.35, pct: -6.2, days: 12, momentum: 1, momPerBar: "-0.51%/bar",
+          checks: [
+            { k: "Speed",      v: "-0.51%/bar (fast down)",  ok: false },
+            { k: "Volume",     v: "0.9x avg (weak)",         ok: false },
+            { k: "Candle",     v: "55% body (bear lean)",    ok: false },
+            { k: "Indicators", v: "RSI 38, MACD falling",    ok: true }
+          ] },
+        { t: "KO", status: "STALLED", statusKind: "warn", entry: 63.85, cur: 64.02, pct: 0.3, days: 40, momentum: 0, momPerBar: "0.01%/bar",
+          checks: [
+            { k: "Speed",      v: "0.01%/bar (dead)",        ok: false },
+            { k: "Volume",     v: "0.6x avg (dry)",          ok: false },
+            { k: "Candle",     v: "12% body (indecisive)",   ok: false },
+            { k: "Indicators", v: "RSI 51, MACD flat",       ok: false }
+          ] }
+      ]
+    },
+    meta: { source: "sample", generated: "2026-07-03T11:28:00" }
+  },
+
+  "2026-07-02": {
+    label: "Wed, Jul 2 2026",
+    session: "Market closed 4:00 PM ET",
+    market: {
+      context: "VIX 16.4 ↓ from 18.4 — ☺ Neutral | Normal conditions. Standard sizing.",
+      indexes: [
+        { name: "Dow Jones", value: "52,304.11", chg: 0.62 },
+        { name: "Nasdaq",    value: "26,040.90", chg: 0.35 },
+        { name: "S&P 500",   value: "7,483.10",  chg: 0.44 },
+        { name: "VIX",       value: "16.40",     chg: -2.90, note: "☺ Neutral" },
+        { name: "Bitcoin",   value: "$61,483.20", chg: -0.85 },
+        { name: "Ethereum",  value: "$1,698.11",  chg: -1.20 },
+        { name: "Kaspa",     value: "$0.0309",    chg: 1.31 }
+      ]
+    },
+    heatmap: [
+      { t: "CRWD", price: 469.20, chg: -0.85, leap: null, group: "active" },
+      { t: "ORCL", price: 142.49, chg: 0.92,  leap: 9, leapMax: 15,    group: "active" },
+      { t: "SNOW", price: 199.25, chg: 1.24,  leap: null, group: "active" },
+      { t: "SSYS", price: 8.48,   chg: 2.17,  leap: 8, leapMax: 15,    group: "active" },
+      { t: "LMND", price: 41.56,  chg: -1.44, leap: null, group: "active" },
+      { t: "PLTR", price: 144.51, chg: -0.62, leap: null, group: "active" },
+      { t: "BMNR", price: 14.15,  chg: 3.98,  leap: 9, leapMax: 15,    group: "active" },
+      { t: "NVDA", price: 197.58, chg: 0.85,  leap: 6, leapMax: 15,    group: "active" },
+      { t: "DE",   price: 517.53, chg: 0.33,  leap: null, group: "active" },
+      { t: "SOFI", price: 21.67,  chg: 2.02,  leap: null, group: "active" },
+      { t: "HOOD", price: 114.61, chg: -2.10, leap: null, group: "active" },
+      { t: "NOW",  price: 105.80, chg: 1.55,  leap: 10, leapMax: 15,   group: "active" },
+      { t: "MU",   price: 140.30, chg: -2.24, leap: null, group: "excluded", reason: "Below 200d MA" },
+      { t: "TSLA", price: 261.75, chg: -1.31, leap: null, group: "excluded", reason: "Earnings <14d" },
+      { t: "GRNY", price: 28.02,  chg: 0.14,  leap: null, group: "excluded", reason: "Volume < 20d avg" },
+      { t: "BTC",  price: 61483.20, chg: -0.85, leap: null, group: "crypto" },
+      { t: "ETH",  price: 1698.11,  chg: -1.20, leap: null, group: "crypto" },
+      { t: "KAS",  price: 0.0309,   chg: 1.31,  leap: null, group: "crypto" }
+    ],
+    leaps: {
+      max: 15, origTopScore: 10,
+      original: [
+        { t: "NOW",  price: 105.80, chg: 1.55, premium: 13.95, strike: 130, exp: "2028-01-21", dte: 568, score: 10, signal: "STRONG SETUP", stale: false, rev: "—" },
+        { t: "ORCL", price: 142.49, chg: 0.92, premium: 19.10, strike: 150, exp: "2028-01-21", dte: 568, score: 9,  signal: "MONITOR", stale: false,      rev: "↑ 52% Sell" },
+        { t: "BMNR", price: 14.15,  chg: 3.98, premium: 3.02,  strike: 20,  exp: "2028-06-16", dte: 715, score: 9,  signal: "MONITOR", stale: false,      rev: "—" }
+      ],
+      exceeders: [
+        { t: "MRVL", price: 62.87, chg: -1.05, premium: 10.10, strike: 95, exp: "2028-06-16", dte: 715, score: 12, signal: "STRONG SETUP", stale: false, rev: "↑ RSI divergence" },
+        { t: "PYPL", price: 59.57, chg: 0.35,  premium: 8.55,  strike: 93, exp: "2028-06-16", dte: 715, score: 11, signal: "STRONG SETUP", stale: false, rev: "—" }
+      ]
+    },
+    swing: {
+      actNow: [
+        { t: "MCHP", score: 88, price: 83.10, rsi: 43.5, asOf: "15:58:02",
+          entry: 83.10, maxChase: 83.52,
+          stop: 74.20, stopPct: -10.7, stopPerShare: -8.90,
+          t1: 92.00, t1Pct: 10.7, rr1: "1.0:1", t2: 97.40, t2Pct: 17.2, rr2: "1.6:1",
+          hold: "7-21d", hardStop: "Jul 23, 2026",
+          theme: "Technical Convergence", note: "Setup building; backtest +8 and improving breadth." },
+        { t: "SLB", score: 85, price: 44.85, rsi: 27.4, asOf: "15:58:07",
+          entry: 44.85, maxChase: 45.07,
+          stop: 41.60, stopPct: -7.2, stopPerShare: -3.25,
+          t1: 48.10, t1Pct: 7.2, rr1: "1.0:1", t2: 50.20, t2Pct: 11.9, rr2: "1.6:1",
+          hold: "7-21d", hardStop: "Jul 23, 2026",
+          theme: "Oversold Energy", note: "RSI 27.4 with 90 tech rank; sector basing." }
+      ],
+      over75: [
+        { t: "MCHP", price: 83.10,  rsi: 43.5, tech: 65, bt: "+8", final: 88, swingPct: 10.7, arb: -1.2, signal: "ACT NOW", opinion: "↓ 48% Buy" },
+        { t: "SLB",  price: 44.85,  rsi: 27.4, tech: 90, bt: "+4", final: 85, swingPct: 7.2,  arb: 0.2,  signal: "ACT NOW", opinion: "↑ 24% Sell" },
+        { t: "T",    price: 20.44,  rsi: 31.2, tech: 78, bt: "+9", final: 84, swingPct: 7.1,  arb: 0.1,  signal: "BUY",     opinion: "→ 80% Sell" },
+        { t: "ORCL", price: 142.49, rsi: 29.9, tech: 87, bt: "+3", final: 81, swingPct: 11.0, arb: -0.4, signal: "BUY",     opinion: "↑ 52% Sell" },
+        { t: "F",    price: 13.21,  rsi: 40.6, tech: 66, bt: "+9", final: 80, swingPct: 7.0,  arb: -0.5, signal: "BUY",     opinion: "↓ 60% Buy" },
+        { t: "GM",   price: 52.86,  rsi: 43.0, tech: 60, bt: "+5", final: 76, swingPct: 5.8,  arb: -0.3, signal: "WATCH",   opinion: "↓ 52% Buy" }
+      ],
+      positions: [
+        { t: "REGN", status: "ON TRACK", statusKind: "good", entry: 624.37, cur: 648.10, pct: 3.8, days: 34, momentum: 2, momPerBar: "0.18%/bar",
+          checks: [
+            { k: "Speed",      v: "0.18%/bar (normal)",     ok: true },
+            { k: "Volume",     v: "1.1x avg (ok)",          ok: true },
+            { k: "Candle",     v: "64% body (conviction)",  ok: false },
+            { k: "Indicators", v: "RSI 58, MACD expanding", ok: false }
+          ] },
+        { t: "GOOGL", status: "NEAR STOP", statusKind: "bad", entry: 371.19, cur: 362.40, pct: -2.4, days: 30, momentum: 1, momPerBar: "-0.08%/bar",
+          checks: [
+            { k: "Speed",      v: "-0.08%/bar (slow)",      ok: false },
+            { k: "Volume",     v: "0.8x avg (weak)",        ok: false },
+            { k: "Candle",     v: "22% body (indecisive)",  ok: false },
+            { k: "Indicators", v: "RSI 47, MACD flat",      ok: true }
+          ] },
+        { t: "AA", status: "NEAR STOP", statusKind: "bad", entry: 63.27, cur: 50.05, pct: -20.9, days: 16, momentum: 0, momPerBar: "-1.10%/bar",
+          checks: [
+            { k: "Speed",      v: "-1.10%/bar (fast down)", ok: false },
+            { k: "Volume",     v: "1.5x avg (heavy)",       ok: false },
+            { k: "Candle",     v: "70% body (bear conviction)", ok: false },
+            { k: "Indicators", v: "RSI 29, MACD falling",   ok: false }
+          ] },
+        { t: "AMD", status: "NEAR TP1", statusKind: "good", entry: 158.20, cur: 171.20, pct: 8.2, days: 27, momentum: 3, momPerBar: "0.38%/bar",
+          checks: [
+            { k: "Speed",      v: "0.38%/bar (strong)",     ok: true },
+            { k: "Volume",     v: "1.2x avg (confirming)",  ok: true },
+            { k: "Candle",     v: "68% body (conviction)",  ok: true },
+            { k: "Indicators", v: "RSI 64, MACD expanding", ok: false }
+          ] },
+        { t: "KO", status: "STALLED", statusKind: "warn", entry: 63.85, cur: 63.90, pct: 0.1, days: 39, momentum: 0, momPerBar: "0.00%/bar",
+          checks: [
+            { k: "Speed",      v: "0.00%/bar (dead)",       ok: false },
+            { k: "Volume",     v: "0.6x avg (dry)",         ok: false },
+            { k: "Candle",     v: "9% body (indecisive)",   ok: false },
+            { k: "Indicators", v: "RSI 50, MACD flat",      ok: false }
+          ] }
+      ]
+    },
+    meta: { source: "sample", generated: "2026-07-02T16:05:00" }
+  },
+
+  "2026-07-01": {
+    label: "Tue, Jul 1 2026",
+    session: "Market closed 4:00 PM ET",
+    market: {
+      context: "VIX 18.4 ↑ from 17.1 — ⚠ Elevated | Choppy tape. Reduce size 25%.",
+      indexes: [
+        { name: "Dow Jones", value: "51,982.44", chg: -0.94 },
+        { name: "Nasdaq",    value: "25,949.85", chg: -1.42 },
+        { name: "S&P 500",   value: "7,450.33",  chg: -1.10 },
+        { name: "VIX",       value: "18.40",     chg: 7.60, note: "⚠ Elevated" },
+        { name: "Bitcoin",   value: "$62,010.55", chg: 1.42 },
+        { name: "Ethereum",  value: "$1,718.77",  chg: 0.55 },
+        { name: "Kaspa",     value: "$0.0305",    chg: -2.05 }
+      ]
+    },
+    heatmap: [
+      { t: "CRWD", price: 473.22, chg: 1.12,  leap: null, group: "active" },
+      { t: "ORCL", price: 141.19, chg: -2.03, leap: 12, leapMax: 15,   group: "active" },
+      { t: "SNOW", price: 196.81, chg: -1.88, leap: null, group: "active" },
+      { t: "SSYS", price: 8.30,   chg: -0.72, leap: 7, leapMax: 15,    group: "active" },
+      { t: "LMND", price: 42.17,  chg: 0.26,  leap: null, group: "active" },
+      { t: "PLTR", price: 145.41, chg: -2.45, leap: null, group: "active" },
+      { t: "BMNR", price: 13.61,  chg: -3.12, leap: 8, leapMax: 15,    group: "active" },
+      { t: "NVDA", price: 195.91, chg: -1.72, leap: 6, leapMax: 15,    group: "active" },
+      { t: "DE",   price: 515.83, chg: 0.48,  leap: null, group: "active" },
+      { t: "SOFI", price: 21.24,  chg: -2.66, leap: null, group: "active" },
+      { t: "HOOD", price: 117.07, chg: -1.95, leap: null, group: "active" },
+      { t: "NOW",  price: 104.18, chg: -0.88, leap: 9, leapMax: 15,    group: "active" },
+      { t: "TSLA", price: 265.22, chg: -2.87, leap: null, group: "excluded", reason: "Earnings <14d" },
+      { t: "GRNY", price: 27.98,  chg: -1.10, leap: null, group: "excluded", reason: "Volume < 20d avg" },
+      { t: "NVMI", price: 230.21, chg: -3.05, leap: null, group: "excluded", reason: "Low option liquidity" },
+      { t: "BTC",  price: 62010.55, chg: 1.42,  leap: null, group: "crypto" },
+      { t: "ETH",  price: 1718.77,  chg: 0.55,  leap: null, group: "crypto" },
+      { t: "KAS",  price: 0.0305,   chg: -2.05, leap: null, group: "crypto" }
+    ],
+    leaps: {
+      max: 15, origTopScore: 12,
+      original: [
+        { t: "ORCL", price: 141.19, chg: -2.03, premium: 18.80, strike: 150, exp: "2028-01-21", dte: 569, score: 12, signal: "STRONG SETUP", stale: false, rev: "↑ 48% Sell" },
+        { t: "NOW",  price: 104.18, chg: -0.88, premium: 13.60, strike: 130, exp: "2028-01-21", dte: 569, score: 9,  signal: "MONITOR", stale: false,      rev: "—" },
+        { t: "BMNR", price: 13.61,  chg: -3.12, premium: 2.95,  strike: 20,  exp: "2028-06-16", dte: 716, score: 8,  signal: "MONITOR", stale: false,      rev: "↓ Doji" }
+      ],
+      exceeders: [
+        { t: "AMAT", price: 188.44, chg: -2.66, premium: 27.90, strike: 260, exp: "2028-06-16", dte: 716, score: 13, signal: "S2 ALERT", stale: false, rev: "↑ RSI divergence" }
+      ]
+    },
+    swing: {
+      actNow: [
+        { t: "T", score: 91, price: 20.31, rsi: 27.7, asOf: "15:57:44",
+          entry: 20.31, maxChase: 20.41,
+          stop: 18.85, stopPct: -7.2, stopPerShare: -1.46,
+          t1: 21.77, t1Pct: 7.2, rr1: "1.0:1", t2: 22.60, t2Pct: 11.3, rr2: "1.6:1",
+          hold: "7-21d", hardStop: "Jul 22, 2026",
+          theme: "Oversold Reversion", note: "Deep oversold; VIX elevated — size down 25% per market context." }
+      ],
+      over75: [
+        { t: "T",    price: 20.31,  rsi: 27.7, tech: 79, bt: "+10", final: 91, swingPct: 7.2,  arb: 0.2,  signal: "ACT NOW", opinion: "→ 88% Sell" },
+        { t: "SLB",  price: 44.20,  rsi: 25.1, tech: 88, bt: "+2",  final: 83, swingPct: 6.8,  arb: 0.1,  signal: "BUY",     opinion: "↑ 24% Sell" },
+        { t: "MCHP", price: 82.05,  rsi: 45.0, tech: 62, bt: "+7",  final: 79, swingPct: 9.4,  arb: -1.0, signal: "BUY",     opinion: "↓ 40% Buy" },
+        { t: "ORCL", price: 141.19, rsi: 31.4, tech: 85, bt: "+2",  final: 78, swingPct: 10.2, arb: -0.4, signal: "BUY",     opinion: "↑ 48% Sell" },
+        { t: "HAL",  price: 31.20,  rsi: 30.9, tech: 70, bt: "+2",  final: 76, swingPct: 5.2,  arb: 0.3,  signal: "WATCH",   opinion: "↑ 40% Buy" }
+      ],
+      positions: [
+        { t: "REGN", status: "ON TRACK", statusKind: "good", entry: 624.37, cur: 640.55, pct: 2.6, days: 33, momentum: 2, momPerBar: "0.15%/bar",
+          checks: [
+            { k: "Speed",      v: "0.15%/bar (normal)",     ok: true },
+            { k: "Volume",     v: "1.0x avg (ok)",          ok: false },
+            { k: "Candle",     v: "58% body (lean bull)",   ok: true },
+            { k: "Indicators", v: "RSI 56, MACD expanding", ok: false }
+          ] },
+        { t: "GOOGL", status: "ON TRACK", statusKind: "good", entry: 371.19, cur: 368.02, pct: -0.9, days: 29, momentum: 1, momPerBar: "-0.03%/bar",
+          checks: [
+            { k: "Speed",      v: "-0.03%/bar (flat)",      ok: false },
+            { k: "Volume",     v: "0.9x avg (weak)",        ok: false },
+            { k: "Candle",     v: "31% body (mixed)",       ok: false },
+            { k: "Indicators", v: "RSI 49, MACD flat",      ok: true }
+          ] },
+        { t: "AA", status: "NEAR STOP", statusKind: "bad", entry: 63.27, cur: 52.90, pct: -16.4, days: 15, momentum: 0, momPerBar: "-0.95%/bar",
+          checks: [
+            { k: "Speed",      v: "-0.95%/bar (fast down)", ok: false },
+            { k: "Volume",     v: "1.3x avg (heavy)",       ok: false },
+            { k: "Candle",     v: "66% body (bear conviction)", ok: false },
+            { k: "Indicators", v: "RSI 30, MACD falling",   ok: false }
+          ] },
+        { t: "AMD", status: "NEAR TP1", statusKind: "good", entry: 158.20, cur: 168.44, pct: 6.5, days: 26, momentum: 2, momPerBar: "0.30%/bar",
+          checks: [
+            { k: "Speed",      v: "0.30%/bar (strong)",     ok: true },
+            { k: "Volume",     v: "1.1x avg (ok)",          ok: true },
+            { k: "Candle",     v: "52% body (lean bull)",   ok: false },
+            { k: "Indicators", v: "RSI 61, MACD expanding", ok: false }
+          ] }
+      ]
+    },
+    meta: { source: "sample", generated: "2026-07-01T16:05:00" }
+  }
+};
+const DEFAULT_DATE = "2026-07-03";
+
+function loadJournals() {
+  // Integration point: the swing_project generator can define window.SWING_JOURNALS
+  // (e.g. via an injected <script> or a sibling journal_data.js loaded before this one).
+  return (typeof window !== "undefined" && window.SWING_JOURNALS) ? window.SWING_JOURNALS : JOURNALS_SAMPLE;
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+  const JOURNALS = loadJournals();
+  const DATES = Object.keys(JOURNALS).sort();                 // ascending
+  const HAS_LIVE = typeof window !== "undefined" && !!window.SWING_JOURNALS;
+  let selected = JOURNALS[DEFAULT_DATE] ? DEFAULT_DATE : DATES[DATES.length - 1];
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ── formatting helpers ────────────────────────────────
+  function fmtPrice(p) {
+    if (p >= 1000) return p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (p < 1) return p.toFixed(4);
+    return p.toFixed(2);
+  }
+  const sPct = (v, dp) => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(dp === undefined ? 2 : dp) + "%";
+  const sNum = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(1);
+  const pctCls = v => v == null ? "flat" : (v > 0.001 ? "up" : (v < -0.001 ? "down" : "flat"));
+
+  // ── color helpers ─────────────────────────────────────
+  function hex2rgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+  function mix(h1, h2, t) {
+    const a = hex2rgb(h1), b = hex2rgb(h2);
+    return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")";
+  }
+  function lumOf(h1, h2, t) {
+    const a = hex2rgb(h1), b = hex2rgb(h2);
+    const c = a.map((v, i) => (v + (b[i] - v) * t) / 255);
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  // V2 light ramp: pale→saturated, neutral gray near 0, dark/white text per luminance
+  function heatLight(chg) {
+    if (chg == null || Math.abs(chg) < 0.15) return { bg: "#eceae6", fg: "#333" };
+    const t = Math.min(Math.abs(chg), 5) / 5;
+    const pale = chg > 0 ? "#cdeacc" : "#f4cccc";
+    const sat  = chg > 0 ? "#59a14f" : "#d64545";
+    return { bg: mix(pale, sat, t), fg: lumOf(pale, sat, t) > 0.52 ? "#1c2a1c" : "#fff" };
+  }
+  // V5 dark ramp: neutral #3a404a at ~0, ramps to green/red, capped ±5%;
+  // excluded tiles pulled 55% back toward gray (desaturated).
+  function heatDark(chg, excluded) {
+    const NEUT = [58, 64, 74];
+    if (chg == null || Math.abs(chg) < 0.15) return "rgb(" + NEUT.join(",") + ")";
+    const END = chg > 0 ? [18, 122, 65] : [186, 55, 55];
+    let t = 0.18 + 0.82 * Math.min(Math.abs(chg), 5) / 5;
+    if (excluded) t *= 0.45;
+    return "rgb(" + NEUT.map((n, i) => Math.round(n + (END[i] - n) * t)).join(",") + ")";
+  }
+
+  // ── deterministic sparkline (desktop index tiles) ─────
+  const WIG = [0, 0.38, -0.2, 0.44, -0.28, 0.31, -0.36, 0.24, -0.16, 0.4, -0.12, 0.18, 0];
+  function sparkline(name, chg) {
+    chg = chg || 0;
+    let seed = 0;
+    for (let i = 0; i < name.length; i++) seed += name.charCodeAt(i);
+    const n = WIG.length, amp = Math.max(0.3, Math.abs(chg)) * 0.55;
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push((i / (n - 1)) * chg + WIG[(i + seed) % n] * amp);
+    const mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts);
+    const span = (mx - mn) || 1;
+    const w = 64, h = 16, pad = 1.5;
+    const d = pts.map((v, i) => {
+      const x = (pad + i * (w - 2 * pad) / (n - 1)).toFixed(1);
+      const y = (h - pad - (v - mn) / span * (h - 2 * pad)).toFixed(1);
+      return (i ? "L" : "M") + x + " " + y;
+    }).join(" ");
+    const col = chg > 0.001 ? "#59a14f" : (chg < -0.001 ? "#d64545" : "#999");
+    return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true">' +
+      '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  // ── badges ────────────────────────────────────────────
+  function sigBadge(sig) {
+    const map = {
+      "S3 ALERT": "sig-s3", "S2 ALERT": "sig-s2", "STRONG SETUP": "sig-strong",
+      "MONITOR": "sig-mon", "ACT NOW": "sig-act", "BUY": "sig-buy", "WATCH": "sig-watch"
+    };
+    return '<span class="sigb ' + (map[sig] || "sig-mon") + '">' + esc(sig) + "</span>";
+  }
+  function arrowCls(txt) {
+    if (txt.indexOf("↑") === 0) return "up";
+    if (txt.indexOf("↓") === 0) return "down";
+    return "flat";
+  }
+
+  // ── header + date controls ────────────────────────────
+  function buildChips() {
+    const chipDates = DATES.slice().reverse();                // newest first
+    $("dateChips").innerHTML = chipDates.map(dt => {
+      const parts = String(JOURNALS[dt].label || dt).split(", ");  // ["Thu", "Jul 3 2026"]
+      const md = (parts[1] || dt).replace(/ \d{4}$/, "");
+      return '<button class="dchip" type="button" data-date="' + esc(dt) + '" aria-pressed="' + (dt === selected) + '">' +
+        '<span class="wk">' + esc(parts[0]) + '</span><span class="md">' + esc(md) + "</span></button>";
+    }).join("");
+    $("dateChips").querySelectorAll(".dchip").forEach(b =>
+      b.addEventListener("click", () => setDate(b.dataset.date)));
+    $("datePick").min = DATES[0];
+    $("datePick").max = DATES[DATES.length - 1];
+  }
+
+  function renderHeader(day) {
+    $("dayLabel").textContent = day.label;
+    $("daySession").textContent = "· " + day.session;
+    $("datePick").value = selected;
+    const i = DATES.indexOf(selected);
+    $("btnPrev").disabled = i <= 0;
+    $("btnNext").disabled = i >= DATES.length - 1;
+    document.querySelectorAll("#dateChips .dchip").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.date === selected)));
+    const selChip = document.querySelector('#dateChips .dchip[aria-pressed="true"]');
+    if (selChip && selChip.scrollIntoView) selChip.scrollIntoView({ block: "nearest", inline: "nearest" });
+    $("ctxLineM").innerHTML =
+      '<span class="sess">' + esc(day.label) + " · " + esc(day.session) + "</span><br>" +
+      esc((day.market && day.market.context) || "");
+    const live = (day.meta && day.meta.source === "live") || HAS_LIVE;
+    const badge = $("srcBadge");
+    badge.textContent = live ? "LIVE JOURNAL DATA" : "MOCKUP · SAMPLE DATA";
+    badge.classList.toggle("live", live);
+    $("foot").textContent = live
+      ? "Journal Dashboard — desktop = Finviz Light · phone = Mobile Compact · live data via build_journal_data.py"
+      : "Journal Dashboard — desktop = Finviz Light · phone = Mobile Compact · static sample data (journal_data.js not found)";
+  }
+
+  function renderMarket(day) {
+    const m = day.market || {};
+    const idx = m.indexes || [];
+    $("ctxLine").textContent = m.context || "";
+    $("idxWrap").style.display = idx.length ? "" : "none";
+    $("mStrip").innerHTML = idx.map(ix =>
+      '<div class="mtile">' +
+        '<div class="mn">' + esc(ix.name) + "</div>" +
+        '<div class="mv">' + esc(ix.value) + "</div>" +
+        '<div class="mc ' + pctCls(ix.chg) + '">' + sPct(ix.chg) +
+          (ix.note ? '<span class="mnote">' + esc(ix.note) + "</span>" : "") + "</div>" +
+        sparkline(ix.name, ix.chg) +
+      "</div>").join("");
+  }
+
+  // ── heatmap ───────────────────────────────────────────
+  function tileTip(s, den) {
+    return "<b>" + esc(s.t) + "</b><br>$" + fmtPrice(s.price) + " · " + sPct(s.chg) +
+      (s.leap != null ? "<br>LEAP score: " + s.leap + "/" + den : "") +
+      (s.reason ? '<br><span class="tr">Excluded: ' + esc(s.reason) + "</span>" : "");
+  }
+  function tileTipPlain(s, den) {
+    return s.t + " — $" + fmtPrice(s.price) + " · " + sPct(s.chg) +
+      (s.leap != null ? " · LEAP " + s.leap + "/" + den : "") +
+      (s.reason ? " · Excluded: " + s.reason : "");
+  }
+
+  function tileHTML(s, dayMax) {
+    const den = s.leapMax != null ? s.leapMax : dayMax;
+    const lite = heatLight(s.chg);
+    const dark = heatDark(s.chg, s.group === "excluded");
+    const w = s.group === "crypto" ? 110 :
+              s.group === "excluded" ? 118 :
+              (s.leap != null ? Math.round(s.leap / den * 210) : 68);   // desktop width ∝ LEAP score
+    const cls = "tile" + (s.group === "excluded" ? " excl" : "") + (s.group === "crypto" ? " cry" : "");
+    const chgInRow = s.group !== "active";
+    return '<div class="' + cls + '" style="--w:' + w + "px;--bgl:" + lite.bg + ";--fgl:" + lite.fg + ";--bgd:" + dark +
+      '" data-tip="' + esc(tileTip(s, den)) + '" data-tipm="' + esc(tileTipPlain(s, den)) + '">' +
+      '<div class="trow"><span class="tk">' + esc(s.t) + "</span>" +
+        (s.leap != null ? '<span class="leapb">' + s.leap + "/" + den + "</span>" : "") +
+        (chgInRow ? '<span class="tchg' + (s.group === "excluded" ? " " + pctCls(s.chg) : "") + '">' + sPct(s.chg) + "</span>" : "") +
+      "</div>" +
+      (chgInRow ? "" : '<span class="tchg">' + sPct(s.chg) + "</span>") +
+      (s.reason ? '<span class="treason">' + esc(s.reason) + "</span>" : "") +
+      (s.group === "crypto" ? '<div class="trow"><span class="tprice">$' + fmtPrice(s.price) + "</span></div>" : "") +
+      "</div>";
+  }
+
+  function renderHeatmap(day) {
+    const hm = day.heatmap || [];
+    const dayMax = (day.leaps && day.leaps.max) || 15;
+    const act = hm.filter(s => s.group === "active");
+    const exc = hm.filter(s => s.group === "excluded");
+    const cry = hm.filter(s => s.group === "crypto");
+    $("heatCnt").textContent = "(" + hm.length + ")";
+    $("hmActLbl").textContent = "Active — journal watchlist (" + act.length + ")";
+    $("hmExcLbl").textContent = "Excluded from scan (" + exc.length + ")";
+    $("hmCryLbl").textContent = "Crypto (" + cry.length + ")";
+    $("hmActive").innerHTML = act.map(s => tileHTML(s, dayMax)).join("");
+    $("hmExcl").innerHTML = exc.map(s => tileHTML(s, dayMax)).join("");
+    $("hmCrypto").innerHTML = cry.map(s => tileHTML(s, dayMax)).join("");
+    $("hmActLbl").style.display = act.length ? "" : "none";
+    $("hmActive").style.display = act.length ? "" : "none";
+    $("exclStrip").style.display = exc.length ? "" : "none";
+    $("hmCryLbl").style.display = cry.length ? "" : "none";
+    $("hmCrypto").style.display = cry.length ? "" : "none";
+    if (!hm.length) {
+      $("hmActive").style.display = "";
+      $("hmActive").innerHTML = '<span class="empty">none today</span>';
+    }
+    $("hmDetail").innerHTML = "Tap a tile for price · % change · LEAP score · reason";
+  }
+
+  // ── LEAP tables ───────────────────────────────────────
+  function leapTable(rows, tintTop, max) {
+    let h = '<div class="tblwrap"><table><thead><tr>' +
+      '<th>Ticker</th><th>Price</th><th>% Chg</th><th>LEAP Premium ($)</th><th>Strike / Exp</th>' +
+      '<th>LEAP Score</th><th class="cl">Signal</th><th class="cl">Rev</th></tr></thead><tbody>';
+    rows.forEach((r, i) => {
+      const tint = tintTop ? (i === 0 ? "tint1" : i === 1 ? "tint2" : i === 2 ? "tint3" : "") : "";
+      h += '<tr class="' + tint + '">' +
+        '<td class="tk-cell">' + esc(r.t) + "</td>" +
+        '<td class="num">$' + fmtPrice(r.price) + "</td>" +
+        '<td class="num ' + pctCls(r.chg) + '"><b>' + sPct(r.chg) + "</b></td>" +
+        '<td class="num">' + (r.premium != null ? "$" + r.premium.toFixed(2) : "—") +
+          (r.stale ? ' <span class="stale-w" title="stale premium (guard)">⚠</span>' : "") + "</td>" +
+        '<td class="num"><span class="small-sub">$' + r.strike + " · " + esc(r.exp) + " · " + r.dte + "d</span></td>" +
+        '<td class="num"><b>' + r.score + "/" + max + '</b><span class="minibar"><i style="width:' + Math.min(100, Math.round(r.score / max * 100)) + '%"></i></span></td>' +
+        '<td class="cl">' + sigBadge(r.signal) + "</td>" +
+        '<td class="cl ' + arrowCls(String(r.rev == null ? "—" : r.rev)) + '">' + esc(r.rev == null ? "—" : r.rev) + "</td></tr>";
+    });
+    return h + "</tbody></table></div>";
+  }
+
+  function renderLeaps(day) {
+    const L = day.leaps || {};
+    const max = L.max || 15;
+    const top = L.origTopScore || 0;
+    const orig = L.original || [], exc = L.exceeders || [];
+    $("leapOrigSub").textContent = "top score today: " + top + "/" + max;
+    $("leapCnt").textContent = "(" + orig.length + "+" + exc.length + " · beat " + top + "/" + max + ")";
+    $("leapOrig").innerHTML = orig.length
+      ? leapTable(orig, true, max)
+      : '<div class="empty">none today</div>';
+    $("leapExcTitle").innerHTML = "Full-Scan LEAPs beating the day's original top score " +
+      '<span class="sec-sub">(&gt; ' + top + "/" + max + " · " + exc.length + " found)</span>";
+    $("leapExc").innerHTML = exc.length
+      ? leapTable(exc, true, max)
+      : '<span class="small-sub">No full-scan LEAP beat the original top score today.</span>';
+  }
+
+  // ── ACT NOW cards ─────────────────────────────────────
+  function renderActNow(day) {
+    const list = (day.swing && day.swing.actNow) || [];
+    $("anSub").textContent = list.length + " signal(s) with Final ≥ 85";
+    $("anCnt").textContent = "(" + list.length + ")";
+    if (!list.length) { $("anGrid").innerHTML = '<div class="empty">none today</div>'; return; }
+    $("anGrid").innerHTML = list.map(a =>
+      '<div class="an-card">' +
+        '<div class="an-flame">' +
+          '<span class="fl-pre">🔥 ACT NOW</span>' +
+          '<span class="an-tk">' + esc(a.t) + "</span>" +
+          '<span class="an-score">' + a.score + "/100</span>" +
+          '<span class="an-px">$' + fmtPrice(a.price) + '<span class="rsi">RSI ' + a.rsi + "</span></span>" +
+        "</div>" +
+        '<div class="an-buyhdr desk-only"><span>▲ BUY — ' + esc(a.t) + '</span><span class="asof">As of ' + esc(a.asOf) + "</span></div>" +
+        '<div class="an-meta mob-only">As of <b>' + esc(a.asOf) + "</b> · Hold <b>" + esc(a.hold) + "</b> · Hard stop <b>" + esc(a.hardStop) + "</b></div>" +
+        '<div class="an-body"><div class="an-rows">' +
+          '<div class="an-row entry"><span class="lbl">Entry</span><span class="big">$' + fmtPrice(a.entry) + '</span><span class="sub">max chase $' + fmtPrice(a.maxChase) + "</span></div>" +
+          '<div class="an-row stop"><span class="lbl">Stop</span><span class="big">$' + fmtPrice(a.stop) + '</span><span class="sub">' + sPct(a.stopPct, 1) + " · –$" + Math.abs(a.stopPerShare).toFixed(2) + "/sh</span></div>" +
+          '<div class="an-row tgt"><span class="lbl">Target 1</span><span class="big">$' + fmtPrice(a.t1) + '</span><span class="sub">' + sPct(a.t1Pct, 1) + " · R/R " + esc(a.rr1) + "</span></div>" +
+          '<div class="an-row tgt"><span class="lbl">Target 2</span><span class="big">$' + fmtPrice(a.t2) + '</span><span class="sub">' + sPct(a.t2Pct, 1) + " · R/R " + esc(a.rr2) + "</span></div>" +
+          '<div class="an-row desk-only"><span class="lbl">Hold</span><span class="big">' + esc(a.hold) + "</span></div>" +
+          '<div class="an-row desk-only"><span class="lbl">Hard stop</span><span class="big">' + esc(a.hardStop) + "</span></div>" +
+          '<div class="an-row desk-only"><span class="lbl">Score</span><span class="big">' + a.score + "/100</span></div>" +
+        "</div>" +
+        ((a.theme || a.note)
+          ? '<div class="an-theme">' + (a.theme ? "<b>" + esc(a.theme) + "</b>" : "") +
+            (a.theme && a.note ? " — " : "") + (a.note ? esc(a.note) : "") + "</div>"
+          : "") +
+        "</div>" +
+      "</div>").join("");
+  }
+
+  // ── positions (simplified compact accordion list) ─────
+  function chipIcon(kind) { return kind === "good" ? "▲ " : kind === "bad" ? "⚠ " : "⏸ "; }
+
+  function renderPositions(day) {
+    const ps = (day.swing && day.swing.positions) || [];
+    $("posSub").textContent = ps.length + " position(s) flagged";
+    $("posCnt").textContent = "(" + ps.length + " flagged)";
+    if (!ps.length) { $("posList").innerHTML = '<div class="empty">none today</div>'; return; }
+    $("posList").innerHTML = ps.map((p, idx) => {
+      const hasMom = p.momentum != null;
+      let segs = "";
+      for (let i = 0; i < 4; i++) segs += "<i" + (i < p.momentum ? ' class="on"' : "") + "></i>";
+      const lv = p.momentum >= 2 ? "lv-hi" : p.momentum === 1 ? "lv-mid" : "lv-lo";
+      return '<div class="pos-item" data-idx="' + idx + '">' +
+        '<button type="button" class="pos-row" aria-expanded="false">' +
+          '<span class="pr-l1">' +
+            '<span class="pos-tk">' + esc(p.t) + "</span>" +
+            '<span class="chip ' + esc(p.statusKind) + '">' + chipIcon(p.statusKind) + esc(p.status) + "</span>" +
+            '<span class="pos-days">' + p.days + "d held</span>" +
+          "</span>" +
+          '<span class="pr-l2">' +
+            '<span class="pos-move">$' + fmtPrice(p.entry) + " → $" + fmtPrice(p.cur) +
+              ' <span class="pct ' + pctCls(p.pct) + '">(' + sPct(p.pct, 1) + ")</span></span>" +
+            '<span class="pos-mom">' + (hasMom
+              ? '<span class="meter ' + lv + '">' + segs + "</span> " + p.momentum + "/4"
+              : esc(p.momPerBar || "")) + "</span>" +
+          "</span>" +
+          '<span class="caret" aria-hidden="true"></span>' +
+        "</button>" +
+        '<div class="pos-detail"><div class="pd-in">' +
+          '<div class="mompb">' + (hasMom ? "Momentum <b>" + p.momentum + "/4</b> · " : "") + esc(p.momPerBar || "") + "</div>" +
+          '<div class="checks">' + (p.checks || []).map(c =>
+            '<div class="chk ' + (c.ok === true ? "ok" : c.ok === false ? "no" : "na") + '">' +
+              '<div class="k"><span class="ic">' + (c.ok === true ? "✓" : c.ok === false ? "✗" : "•") + "</span>" + esc(c.k) + "</div>" +
+              '<div class="v">' + esc(c.v) + "</div>" +
+            "</div>").join("") +
+          "</div>" +
+        "</div></div>" +
+      "</div>";
+    }).join("");
+  }
+
+  // accordion (delegated; one open at a time)
+  $("posList").addEventListener("click", e => {
+    const row = e.target.closest(".pos-row");
+    if (!row) return;
+    const item = row.closest(".pos-item");
+    const wasOpen = item.classList.contains("open");
+    $("posList").querySelectorAll(".pos-item.open").forEach(it => {
+      it.classList.remove("open");
+      it.querySelector(".pos-row").setAttribute("aria-expanded", "false");
+    });
+    if (!wasOpen) {
+      item.classList.add("open");
+      row.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  // ── over-75 table ─────────────────────────────────────
+  function renderOver75(day) {
+    const rows = (day.swing && day.swing.over75) || [];
+    $("o75Sub").textContent = rows.length + " flag(s)";
+    $("o75Cnt").textContent = "(" + rows.length + ")";
+    if (!rows.length) { $("o75").innerHTML = '<div class="empty">none today</div>'; return; }
+    let h = '<div class="tblwrap"><table><thead><tr>' +
+      "<th>Symbol</th><th>Price</th><th>RSI</th><th>Tech</th><th>BT±</th><th>Final</th>" +
+      '<th>Swing%</th><th>ARB</th><th class="cl">Signal</th><th class="cl">Opinion</th></tr></thead><tbody>';
+    rows.forEach(r => {
+      const cls = r.signal === "ACT NOW" ? "row-act" : r.signal === "BUY" ? "row-buy" : "row-watch";
+      h += '<tr class="' + cls + '">' +
+        '<td class="tk-cell">' + esc(r.t) + "</td>" +
+        '<td class="num">$' + fmtPrice(r.price) + "</td>" +
+        '<td class="num">' + (r.rsi != null ? r.rsi.toFixed(1) : "—") + "</td>" +
+        '<td class="num">' + r.tech + "</td>" +
+        '<td class="num">' + esc(r.bt) + "</td>" +
+        '<td class="num"><b>' + r.final + "</b></td>" +
+        '<td class="num">' + sPct(r.swingPct, 1) + "</td>" +
+        '<td class="num ' + pctCls(r.arb) + '">' + sNum(r.arb) + "</td>" +
+        '<td class="cl">' + sigBadge(r.signal) + "</td>" +
+        '<td class="cl ' + arrowCls(String(r.opinion == null ? "—" : r.opinion)) + '">' + esc(r.opinion == null ? "—" : r.opinion) + "</td></tr>";
+    });
+    $("o75").innerHTML = h + "</tbody></table></div>";
+  }
+
+  // ── render everything from selected date ──────────────
+  function renderAll() {
+    const day = JOURNALS[selected];
+    const tipEl = document.getElementById("tip");
+    if (tipEl) tipEl.style.display = "none";
+    renderHeader(day);
+    renderMarket(day);
+    renderHeatmap(day);
+    renderLeaps(day);
+    renderActNow(day);
+    renderPositions(day);
+    renderOver75(day);
+  }
+
+  function setDate(d) {
+    if (!JOURNALS[d]) return;
+    selected = d;
+    renderAll();
+  }
+
+  // ── date controls (desktop arrows + native input) ─────
+  function snapToAvailable(v) {
+    if (JOURNALS[v]) return v;
+    const target = new Date(v + "T00:00:00Z").getTime();
+    if (isNaN(target)) return selected;
+    let best = DATES[0], bestD = Infinity;
+    DATES.forEach(d => {
+      const diff = Math.abs(new Date(d + "T00:00:00Z").getTime() - target);
+      if (diff < bestD) { bestD = diff; best = d; }
+    });
+    return best;
+  }
+  $("btnPrev").addEventListener("click", () => {
+    const i = DATES.indexOf(selected);
+    if (i > 0) setDate(DATES[i - 1]);
+  });
+  $("btnNext").addEventListener("click", () => {
+    const i = DATES.indexOf(selected);
+    if (i < DATES.length - 1) setDate(DATES[i + 1]);
+  });
+  $("datePick").addEventListener("change", e => setDate(snapToAvailable(e.target.value || selected)));
+
+  // ── responsive mode: desktop = all open, mobile = V5 defaults + user toggles ──
+  const mq = window.matchMedia("(max-width: 719.98px)");
+  const MOBILE_DEFAULT_OPEN = { "sec-act": true, "sec-heat": true, "sec-leaps": false, "sec-pos": false, "sec-over": false };
+  const mobileState = Object.assign({}, MOBILE_DEFAULT_OPEN);
+  let applying = false;
+  let wasMobile = null;
+
+  function applyMode() {
+    const mob = mq.matches;
+    document.documentElement.classList.toggle("mobile", mob);
+    if (mob === wasMobile) return;
+    applying = true;
+    document.querySelectorAll("details.sec").forEach(d => {
+      if (mob) {
+        // entering mobile: restore V5 defaults (then user toggles take over)
+        d.open = wasMobile === null ? !!mobileState[d.id] : !!MOBILE_DEFAULT_OPEN[d.id];
+        if (wasMobile !== null) mobileState[d.id] = !!MOBILE_DEFAULT_OPEN[d.id];
+      } else {
+        d.open = true;                      // entering desktop: force all open
+      }
+    });
+    applying = false;
+    wasMobile = mob;
+  }
+  document.querySelectorAll("details.sec").forEach(d => {
+    d.addEventListener("toggle", () => {
+      if (!applying && mq.matches) mobileState[d.id] = d.open;
+    });
+    // desktop: summary is a static V2 title bar — block collapse (incl. keyboard)
+    d.querySelector("summary").addEventListener("click", e => {
+      if (!mq.matches) e.preventDefault();
+    });
+  });
+  if (mq.addEventListener) mq.addEventListener("change", applyMode);
+  else mq.addListener(applyMode);
+  window.addEventListener("resize", applyMode);   // re-check state on resize
+
+  // ── heatmap interactions ──────────────────────────────
+  // Desktop: hover tooltip (V2). Mobile: tap → detail line (V5).
+  const tip = $("tip");
+  function moveTip(e) {
+    const pad = 14;
+    let x = e.clientX + 12, y = e.clientY + pad;
+    const r = tip.getBoundingClientRect();
+    if (x + r.width + 8 > window.innerWidth) x = Math.max(4, window.innerWidth - r.width - 8);
+    if (y + r.height + 8 > window.innerHeight) y = e.clientY - r.height - 10;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+  document.addEventListener("mouseover", e => {
+    if (mq.matches) return;
+    const el = e.target.closest && e.target.closest("[data-tip]");
+    if (el) { tip.innerHTML = el.getAttribute("data-tip"); tip.style.display = "block"; moveTip(e); }
+  });
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display === "block") {
+      const el = e.target.closest && e.target.closest("[data-tip]");
+      if (el && !mq.matches) moveTip(e); else tip.style.display = "none";
+    }
+  });
+  document.addEventListener("mouseout", e => {
+    const el = e.target.closest && e.target.closest("[data-tip]");
+    if (el) tip.style.display = "none";
+  });
+  document.addEventListener("click", e => {
+    if (!mq.matches) return;
+    const el = e.target.closest && e.target.closest("[data-tipm]");
+    if (!el) return;
+    const txt = el.getAttribute("data-tipm");
+    const dash = txt.indexOf(" — ");
+    $("hmDetail").innerHTML = "<b>" + esc(txt.slice(0, dash)) + "</b> — " + esc(txt.slice(dash + 3));
+  });
+
+  // ── init ──────────────────────────────────────────────
+  buildChips();
+  applyMode();
+  renderAll();
+})();
+</script>
+</body>
+</html>
