@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Journal Dashboard — V2+V5 Responsive</title>
+<link rel="icon" href="data:,"><!-- suppress the auto /favicon.ico fetch (404 noise over plain http) -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   button, input { font: inherit; }
@@ -274,6 +275,8 @@
     .jr-stat { border: 1px solid #ddd; background: #fbfbfb; padding: 8px 10px; min-width: 0; }
     .jr-k { font-size: 10px; font-weight: bold; letter-spacing: .6px; text-transform: uppercase; color: #888; }
     .jr-v { font-size: 17px; font-weight: bold; color: #111; font-variant-numeric: tabular-nums; margin-top: 1px; }
+    .jr-v.up { color: #1e7a1e; }
+    .jr-v.down { color: #c0392b; }
     .jr-v .jr-vp { font-size: 12.5px; }
     .jr-s { font-size: 11px; color: #777; margin-top: 2px; font-variant-numeric: tabular-nums; }
     .jr-badge { display: inline-block; margin-top: 5px; font-size: 10.5px; font-weight: bold; padding: 1px 7px; border-radius: 2px; border: 1px solid transparent; font-variant-numeric: tabular-nums; }
@@ -1887,12 +1890,13 @@ function loadJournals() {
   function emptyChart(msg) { return '<div class="empty">' + esc(msg || "no data in range") + "</div>"; }
 
   // a. P/L split by strategy — one horizontal proportion bar (NOT a pie)
-  function chartSplit(w) {
+  // cw = measured container width so the end labels never clip in the card.
+  function chartSplit(w, cw) {
     var sp = (w.charts && w.charts.split) || {};
     var sw = sp.swing || 0, lp = sp.leap || 0;
     var a = Math.abs(sw), b = Math.abs(lp), tot = a + b;
     if (!tot) return emptyChart("no closed P/L in range");
-    var W = 500, H = 58, x0 = 4, bw = W - 8, y = 22, h = 15;
+    var W = Math.max(300, cw || 500), H = 58, x0 = 4, bw = W - 8, y = 22, h = 15;
     var swW = bw * a / tot;
     var pa = Math.round(a / tot * 100), pb = 100 - pa;
     var s = svgOpen(W, H);
@@ -1981,12 +1985,12 @@ function loadJournals() {
   }
 
   // d. Win rate by strategy — two thin bars (null strategy skipped)
-  function chartWinRate(w) {
+  function chartWinRate(w, cw) {
     var wr = (w.charts && w.charts.winRateBy) || {};
     var rows = [["Swing", wr.swing, "var(--jr-sw)"], ["LEAP", wr.leap, "var(--jr-lp)"]]
       .filter(function (r) { return r[1] != null; });
     if (!rows.length) return emptyChart();
-    var W = 460, labelW = 50, track = W - labelW - 60, rowH = 26;
+    var W = Math.max(300, cw || 460), labelW = 50, track = W - labelW - 60, rowH = 26;
     var H = rows.length * rowH + 10;
     var s = svgOpen(W, H);
     s += '<line x1="' + (labelW + track / 2) + '" y1="4" x2="' + (labelW + track / 2) + '" y2="' + (H - 6) +
@@ -2003,7 +2007,7 @@ function loadJournals() {
   }
 
   // e. Cumulative P/L — two step-lines with end-point labels + legend
-  function chartCumulative(w) {
+  function chartCumulative(w, cw) {
     var cu = (w.charts && w.charts.cumulative) || {};
     var series = [["Swing", cu.swing || [], "var(--jr-sw)"], ["LEAP", cu.leap || [], "var(--jr-lp)"]]
       .filter(function (sr) { return sr[1].length; });
@@ -2016,7 +2020,7 @@ function loadJournals() {
         minV = Math.min(minV, p[1]); maxV = Math.max(maxV, p[1]);
       });
     });
-    var W = 500, H = 180, padL = 8, padR = 88, padT = 20, padB = 16;
+    var W = Math.max(380, cw || 500), H = 180, padL = 8, padR = 88, padT = 20, padB = 16;
     var spanT = (maxT - minT) || 1, spanV = (maxV - minV) || 1;
     var X = function (t) { return padL + (t - minT) / spanT * (W - padL - padR); };
     var Y = function (v) { return padT + (maxV - v) / spanV * (H - padT - padB); };
@@ -2199,14 +2203,15 @@ function loadJournals() {
     }).join("");
     var counts = journal.counts || {};
     var html =
-      '<div class="jr-toolbar">' + chips + '<a href="#" class="jr-lock" id="jrLockLink">Lock</a></div>' +
+      '<div class="jr-toolbar">' + chips + '<a href="#" class="jr-lock" id="jrLockLink">Lock</a>' +
+      (remembered ? ' <a href="#" class="jr-lock" id="jrForgetLink" title="Remove the saved key from this browser and lock">Lock &amp; forget device</a>' : "") + "</div>" +
       statCards(w) +
       '<div class="jr-charts">' +
-        '<div class="jr-chart"><div class="jr-ct">P/L split by strategy <span class="jr-cs">share of |P/L|</span></div><div class="jr-cw">' + chartSplit(w) + "</div></div>" +
+        '<div class="jr-chart"><div class="jr-ct">P/L split by strategy <span class="jr-cs">share of |P/L|</span></div><div class="jr-cw" id="jrCwSplit"></div></div>' +
         '<div class="jr-chart"><div class="jr-ct">Monthly P/L <span class="jr-cs">stacked · swing green / LEAP blue</span></div><div class="jr-cw">' + chartMonthly(w) + "</div></div>" +
         '<div class="jr-chart"><div class="jr-ct">' + (pp.mode === "weekly" ? "Weekly" : "Daily") + ' P/L <span class="jr-cs">by sell ' + (pp.mode === "weekly" ? "week" : "day") + "</span></div>" + '<div class="jr-cw">' + chartPeriod(w) + "</div></div>" +
-        '<div class="jr-chart"><div class="jr-ct">Win rate by strategy</div><div class="jr-cw">' + chartWinRate(w) + "</div></div>" +
-        '<div class="jr-chart"><div class="jr-ct">Cumulative P/L <span class="jr-cs">running by sell date</span></div><div class="jr-cw">' + chartCumulative(w) + "</div></div>" +
+        '<div class="jr-chart"><div class="jr-ct">Win rate by strategy</div><div class="jr-cw" id="jrCwWin"></div></div>' +
+        '<div class="jr-chart"><div class="jr-ct">Cumulative P/L <span class="jr-cs">running by sell date</span></div><div class="jr-cw" id="jrCwCum"></div></div>' +
       "</div>" +
       '<div class="jr-tradeshdr">Recent trades <span class="jr-cs">(' + (w.trades ? w.trades.length : 0) + " shown · newest first)</span></div>" +
       tradesTable(w) +
@@ -2217,6 +2222,14 @@ function loadJournals() {
         esc(journal.sourceCsv || "—") + " · computed " + esc(journal.generated || "—") +
       "</div>";
     body.innerHTML = html;
+    // Fixed-layout charts (split / win rate / cumulative) are sized to the
+    // measured card width so their end labels never clip. When the card has
+    // no layout yet (collapsed mobile <details>), the chart falls back to a
+    // safe minimum and is re-rendered on the section's next toggle/resize.
+    var cw = $("jrCwSplit").clientWidth || 0;
+    $("jrCwSplit").innerHTML = chartSplit(w, cw);
+    $("jrCwWin").innerHTML = chartWinRate(w, cw);
+    $("jrCwCum").innerHTML = chartCumulative(w, cw);
     body.querySelectorAll(".jr-rchip").forEach(function (b) {
       b.addEventListener("click", function () {
         if (b.disabled || b.dataset.r === range) return;
@@ -2228,6 +2241,14 @@ function loadJournals() {
       e.preventDefault();
       journal = null;
       if (!remembered) { try { localStorage.removeItem(LS_KEY); } catch (err) {} }
+      renderLocked();
+    });
+    var forget = $("jrForgetLink");
+    if (forget) forget.addEventListener("click", function (e) {
+      e.preventDefault();
+      journal = null;
+      remembered = false;
+      try { localStorage.removeItem(LS_KEY); } catch (err) {}
       renderLocked();
     });
   }
@@ -2258,6 +2279,17 @@ function loadJournals() {
   if (!blob) renderNotConfigured();          // (also the sample-data mode — never fabricate journal numbers)
   else if (tryAutoUnlock()) renderUnlocked();
   else renderLocked();
+
+  // Re-fit measured-width charts when the section (re)opens on mobile or the
+  // viewport size / skin changes while unlocked.
+  var sec = $("sec-journal");
+  function refit() { if (journal && sec && sec.open && body.querySelector(".jr-stats")) renderUnlocked(); }
+  if (sec) sec.addEventListener("toggle", function () { if (sec.open) refit(); });
+  var rzT = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(rzT);
+    rzT = setTimeout(refit, 180);
+  });
 })();
 </script>
 </body>
