@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Journal Dashboard — V2+V5 Responsive</title>
+<link rel="icon" href="data:,"><!-- suppress the auto /favicon.ico fetch (404 noise over plain http) -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   button, input { font: inherit; }
@@ -249,6 +250,54 @@
     .empty { color: #999; font-size: 11.5px; padding: 4px 2px; }
 
     footer { margin-top: 14px; color: #999; font-size: 11px; text-align: center; }
+
+    /* ── Trade Journal (desktop) ── */
+    #sec-journal { --jr-sw:#59a14f; --jr-lp:#4a86c8; --jr-pos:#1e7a1e; --jr-neg:#c0392b;
+      --jr-axis:#c9c9c9; --jr-grid:#ececec; --jr-fg:#333; --jr-muted:#8a8a8a; }
+    .jr-notecard { border: 1px dashed #c9c9c9; background: #fafafa; color: #777; font-size: 12px; padding: 12px 14px; }
+    .jr-notecard b { color: #555; }
+    .jr-lockcard { max-width: 460px; border: 1px solid #d9d9d9; background: #fbfbfb; padding: 13px 15px; }
+    .jr-locktitle { font-weight: bold; font-size: 13px; color: #222; margin-bottom: 9px; }
+    .jr-form { display: flex; gap: 6px; }
+    .jr-form input[type="password"] { flex: 1; min-width: 0; border: 1px solid #c9c9c9; border-radius: 2px; padding: 4px 8px; background: #fff; color: #222; }
+    .jr-form button { font-weight: bold; cursor: pointer; background: #4a86c8; color: #fff; border: 1px solid #3a6ea8; border-radius: 2px; padding: 4px 14px; white-space: nowrap; }
+    .jr-form button:disabled { opacity: .6; cursor: default; }
+    .jr-remember { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; color: #555; cursor: pointer; }
+    .jr-err { color: #c0392b; font-weight: bold; font-size: 11.5px; margin-top: 7px; display: none; }
+    .jr-note { color: #999; font-size: 10.5px; margin-top: 7px; }
+    .jr-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 9px; }
+    .jr-rchip { font-weight: bold; cursor: pointer; background: #f4f4f4; color: #333; border: 1px solid #c9c9c9; padding: 3px 12px; border-radius: 2px; }
+    .jr-rchip:hover:not(:disabled) { background: #e8eef7; border-color: #4a86c8; }
+    .jr-rchip[aria-pressed="true"] { background: #4a86c8; border-color: #3a6ea8; color: #fff; }
+    .jr-rchip:disabled { opacity: .35; cursor: default; }
+    .jr-lock { margin-left: auto; font-size: 11.5px; color: #4a86c8; }
+    .jr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .jr-stat { border: 1px solid #ddd; background: #fbfbfb; padding: 8px 10px; min-width: 0; }
+    .jr-k { font-size: 10px; font-weight: bold; letter-spacing: .6px; text-transform: uppercase; color: #888; }
+    .jr-v { font-size: 17px; font-weight: bold; color: #111; font-variant-numeric: tabular-nums; margin-top: 1px; }
+    .jr-v.up { color: #1e7a1e; }
+    .jr-v.down { color: #c0392b; }
+    .jr-v .jr-vp { font-size: 12.5px; }
+    .jr-s { font-size: 11px; color: #777; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .jr-badge { display: inline-block; margin-top: 5px; font-size: 10.5px; font-weight: bold; padding: 1px 7px; border-radius: 2px; border: 1px solid transparent; font-variant-numeric: tabular-nums; }
+    .jr-badge.ok { background: #d9edd3; color: #1e5c2a; border-color: #9dc793; }
+    .jr-badge.below { background: #fdeecd; color: #7a4b00; border-color: #e0b45f; }
+    .jr-badge.losing { background: #f8d7d4; color: #8b1e1e; border-color: #dc9a94; }
+    .jr-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 8px; }
+    .jr-chart { border: 1px solid #ddd; background: #fff; padding: 7px 9px 5px; min-width: 0; }
+    .jr-ct { font-size: 11px; font-weight: bold; color: #444; margin-bottom: 3px; }
+    .jr-ct .jr-cs { font-weight: normal; color: #999; font-size: 10.5px; }
+    .jr-cw { overflow-x: auto; }
+    .jr-chart svg { display: block; }
+    .jr-schip { display: inline-block; font-size: 9.5px; font-weight: bold; padding: 0 6px; border-radius: 9px; border: 1px solid transparent; }
+    .jr-schip.sw { background: #d9edd3; color: #1e5c2a; border-color: #9dc793; }
+    .jr-schip.lp { background: #dbe8f8; color: #274f79; border-color: #a7c4e6; }
+    .jr-schip.ex { background: #efefef; color: #888; border-color: #d5d5d5; }
+    .jr-schip.opt { background: #fdeecd; color: #7a4b00; border-color: #e0b45f; margin-left: 4px; }
+    tr.jr-excl td { color: #aaa; }
+    tr.jr-excl .tk-cell { color: #999; }
+    .jr-tradeshdr { font-size: 11px; font-weight: bold; color: #444; margin: 10px 0 4px; }
+    .jr-foot { margin-top: 8px; font-size: 10.5px; color: #999; font-variant-numeric: tabular-nums; }
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -272,8 +321,9 @@
     #sec-heat { order: 3; }
     #sec-leaps{ order: 4; }
     #sec-pos  { order: 5; }
-    #sec-over { order: 6; }
-    footer    { order: 7; }
+    #sec-journal { order: 6; }
+    #sec-over { order: 7; }
+    footer    { order: 8; }
 
     /* sticky top bar */
     .topbar {
@@ -481,7 +531,56 @@
     .empty { color: #8b93a3; font-size: 12px; padding: 6px 2px; }
 
     footer { margin: 20px auto 0; padding: 0 12px 26px; font-size: 10.5px; color: #6b7482; text-align: center; }
+
+    /* ── Trade Journal (mobile) ── */
+    #sec-journal { --jr-sw:#3fbf77; --jr-lp:#6ea8ff; --jr-pos:#5fd38d; --jr-neg:#ff8280;
+      --jr-axis:#333b48; --jr-grid:#232935; --jr-fg:#d7dce6; --jr-muted:#8b93a3; }
+    .jr-notecard { background: #171b22; border: 1px dashed #2c3340; border-radius: 9px; color: #9aa3b2; font-size: 12px; padding: 11px 12px; margin-top: 10px; }
+    .jr-notecard b { color: #d7dce6; }
+    .jr-lockcard { background: #171b22; border: 1px solid #232935; border-radius: 11px; padding: 13px 13px; margin-top: 10px; }
+    .jr-locktitle { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+    .jr-form { display: flex; gap: 8px; }
+    .jr-form input[type="password"] { flex: 1; min-width: 0; background: #11141a; color: #e8eaf0; border: 1px solid #2a303c; border-radius: 9px; padding: 9px 11px; }
+    .jr-form button { background: #2b3546; border: 1px solid #4a6ea8; color: #eef3fb; font-weight: 700; border-radius: 9px; padding: 9px 15px; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+    .jr-form button:disabled { opacity: .6; }
+    .jr-remember { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; color: #9aa3b2; }
+    .jr-err { color: #ff8280; font-weight: 700; font-size: 12px; margin-top: 8px; display: none; }
+    .jr-note { color: #6b7482; font-size: 10.5px; margin-top: 8px; }
+    .jr-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .jr-rchip { flex: 0 0 auto; background: #171b22; border: 1px solid #2a303c; border-radius: 999px; padding: 6px 14px; color: #c6cdd9; font-weight: 700; font-size: 12.5px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .jr-rchip[aria-pressed="true"] { background: #2b3546; border-color: #4a6ea8; color: #eef3fb; }
+    .jr-rchip:disabled { opacity: .35; }
+    .jr-lock { margin-left: auto; color: #9db8dd; font-size: 12px; }
+    .jr-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .jr-stat { background: #171b22; border: 1px solid #232935; border-radius: 10px; padding: 9px 11px; min-width: 0; }
+    .jr-stat.wide { grid-column: 1 / -1; }
+    .jr-k { font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #8b93a3; }
+    .jr-v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .jr-v .jr-vp { font-size: 12px; }
+    .jr-s { font-size: 11px; color: #9aa3b2; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .jr-badge { display: inline-block; margin-top: 6px; font-size: 10.5px; font-weight: 800; border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; }
+    .jr-badge.ok { color: #c9f4d9; background: #173425; border: 1px solid #2b5c3f; }
+    .jr-badge.below { color: #ffe1ad; background: #403010; border: 1px solid #6d5320; }
+    .jr-badge.losing { color: #ffd7d5; background: #4a1f1e; border: 1px solid #7c3230; }
+    .jr-charts { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .jr-chart { background: #171b22; border: 1px solid #232935; border-radius: 10px; padding: 9px 11px 6px; min-width: 0; }
+    .jr-ct { font-size: 11px; font-weight: 700; color: #d7dce6; margin-bottom: 4px; }
+    .jr-ct .jr-cs { font-weight: 600; color: #8b93a3; font-size: 10px; }
+    .jr-cw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .jr-chart svg { display: block; }
+    .jr-schip { display: inline-block; font-size: 9px; font-weight: 800; border-radius: 999px; padding: 1px 7px; }
+    .jr-schip.sw { color: #c9f4d9; background: #173425; border: 1px solid #2b5c3f; }
+    .jr-schip.lp { color: #cfe0ff; background: #1c2a44; border: 1px solid #33507c; }
+    .jr-schip.ex { color: #aab2c0; background: #242a34; border: 1px solid #333c4a; }
+    .jr-schip.opt { color: #ffe1ad; background: #403010; border: 1px solid #6d5320; margin-left: 4px; }
+    tr.jr-excl td { color: #69707d; }
+    tr.jr-excl td:first-child { color: #69707d; }
+    .jr-tblwrap table { min-width: 620px; }
+    .jr-tradeshdr { margin: 12px 2px 0; font-size: 12.5px; font-weight: 700; color: #d7dce6; }
+    .jr-foot { margin-top: 10px; font-size: 10.5px; color: #8b93a3; font-variant-numeric: tabular-nums; }
   }
+  @keyframes jrshake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+  .jr-shake { animation: jrshake .35s ease; }
 </style>
 </head>
 <body>
@@ -573,6 +672,17 @@
     <div class="sec-body"><div id="posList"></div></div>
   </details>
 
+  <details class="sec" id="sec-journal">
+    <summary>
+      <span class="emo">💰</span>
+      <span class="t-desk">Trade Journal</span>
+      <span class="t-mob">Trade Journal</span>
+      <span class="cnt mob-only" id="jrLockIco"></span>
+      <span class="sec-sub desk-only" id="jrSub"></span>
+    </summary>
+    <div class="sec-body" id="jrBody"></div>
+  </details>
+
   <details class="sec" id="sec-over" open>
     <summary>
       <span class="emo">🚩</span>
@@ -590,6 +700,252 @@
 <div id="tip"></div>
 
 <script src="journal_data.js"></script>
+<script id="journal-crypto">
+/* __JOURNAL_CRYPTO_BEGIN__
+   Pure-JS SHA-256 / HMAC-SHA256 / PBKDF2-HMAC-SHA256 + keystream cipher.
+   NO crypto.subtle anywhere — this page runs over plain http:// on a LAN IP,
+   which is NOT a secure context, so WebCrypto is undefined there.
+   Scheme (matches build_journal_data.py byte-for-byte):
+     PBKDF2-HMAC-SHA256(password, salt, iter, 64) -> encKey(32) || macKey(32)
+     keystream block i = HMAC-SHA256(encKey, nonce || BE_uint32(i))
+     ct = pt XOR keystream ; mac = HMAC-SHA256(macKey, salt||nonce||ct)   */
+(function (g) {
+  "use strict";
+  var K = new Int32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2]);
+
+  function sha256(data) {                       // Uint8Array -> Uint8Array(32)
+    var len = data.length;
+    var total = (((len + 9) + 63) >> 6) << 6;   // padded length (multiple of 64)
+    var buf = new Uint8Array(total);
+    buf.set(data);
+    buf[len] = 0x80;
+    var hi = Math.floor(len / 0x20000000), lo = (len << 3) >>> 0;
+    buf[total - 8] = (hi >>> 24) & 255; buf[total - 7] = (hi >>> 16) & 255;
+    buf[total - 6] = (hi >>> 8) & 255;  buf[total - 5] = hi & 255;
+    buf[total - 4] = (lo >>> 24) & 255; buf[total - 3] = (lo >>> 16) & 255;
+    buf[total - 2] = (lo >>> 8) & 255;  buf[total - 1] = lo & 255;
+    var h0 = 0x6a09e667 | 0, h1 = 0xbb67ae85 | 0, h2 = 0x3c6ef372 | 0, h3 = 0xa54ff53a | 0;
+    var h4 = 0x510e527f | 0, h5 = 0x9b05688c | 0, h6 = 0x1f83d9ab | 0, h7 = 0x5be0cd19 | 0;
+    var w = new Int32Array(64), i, off;
+    for (off = 0; off < total; off += 64) {
+      for (i = 0; i < 16; i++)
+        w[i] = (buf[off + i * 4] << 24) | (buf[off + i * 4 + 1] << 16) | (buf[off + i * 4 + 2] << 8) | buf[off + i * 4 + 3];
+      for (i = 16; i < 64; i++) {
+        var x = w[i - 15], y = w[i - 2];
+        var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+        var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+      var a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, gg = h6, h = h7;
+      for (i = 0; i < 64; i++) {
+        var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+        var ch = (e & f) ^ (~e & gg);
+        var t1 = (h + S1 + ch + K[i] + w[i]) | 0;
+        var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var t2 = (S0 + maj) | 0;
+        h = gg; gg = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
+      h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + gg) | 0; h7 = (h7 + h) | 0;
+    }
+    var H = [h0, h1, h2, h3, h4, h5, h6, h7], out = new Uint8Array(32);
+    for (i = 0; i < 8; i++) {
+      out[i * 4] = (H[i] >>> 24) & 255; out[i * 4 + 1] = (H[i] >>> 16) & 255;
+      out[i * 4 + 2] = (H[i] >>> 8) & 255; out[i * 4 + 3] = H[i] & 255;
+    }
+    return out;
+  }
+
+  function hmacSha256(key, msg) {               // Uint8Array, Uint8Array -> Uint8Array(32)
+    if (key.length > 64) key = sha256(key);
+    var inner = new Uint8Array(64 + msg.length), outer = new Uint8Array(64 + 32), i;
+    for (i = 0; i < 64; i++) {
+      var kb = i < key.length ? key[i] : 0;
+      inner[i] = kb ^ 0x36; outer[i] = kb ^ 0x5c;
+    }
+    inner.set(msg, 64);
+    outer.set(sha256(inner), 64);
+    return sha256(outer);
+  }
+
+  function pbkdf2Block(password, salt, iterations, blockIndex, onChunk, done) {
+    // one 32-byte PBKDF2 block, computed in chunks so the UI can paint between them
+    var msg = new Uint8Array(salt.length + 4);
+    msg.set(salt);
+    msg[salt.length] = (blockIndex >>> 24) & 255; msg[salt.length + 1] = (blockIndex >>> 16) & 255;
+    msg[salt.length + 2] = (blockIndex >>> 8) & 255; msg[salt.length + 3] = blockIndex & 255;
+    var u = hmacSha256(password, msg);
+    var t = new Uint8Array(u);
+    var i = 1, CHUNK = 4000;
+    function step() {
+      var end = Math.min(iterations, i + CHUNK);
+      for (; i < end; i++) {
+        u = hmacSha256(password, u);
+        for (var j = 0; j < 32; j++) t[j] ^= u[j];
+      }
+      if (i < iterations) { if (onChunk) onChunk(i, iterations); setTimeout(step, 0); }
+      else done(t);
+    }
+    step();
+  }
+
+  // async chunked PBKDF2 (used by the unlock UI so "Unlocking…" paints)
+  function pbkdf2Async(passwordStr, salt, iterations, dklen, done, onChunk) {
+    var password = utf8(passwordStr);
+    var nblocks = Math.ceil(dklen / 32);
+    var out = new Uint8Array(nblocks * 32), bi = 0;
+    (function next() {
+      pbkdf2Block(password, salt, iterations, bi + 1, function (i, n) {
+        if (onChunk) onChunk(bi * iterations + i, nblocks * iterations);
+      }, function (t) {
+        out.set(t, bi * 32); bi++;
+        if (bi < nblocks) setTimeout(next, 0);
+        else done(out.subarray(0, dklen));
+      });
+    })();
+  }
+
+  // sync PBKDF2 (self-test / non-UI paths)
+  function pbkdf2Sync(passwordStr, salt, iterations, dklen) {
+    var password = utf8(passwordStr);
+    var nblocks = Math.ceil(dklen / 32);
+    var out = new Uint8Array(nblocks * 32);
+    for (var bi = 0; bi < nblocks; bi++) {
+      var msg = new Uint8Array(salt.length + 4);
+      msg.set(salt);
+      var idx = bi + 1;
+      msg[salt.length] = (idx >>> 24) & 255; msg[salt.length + 1] = (idx >>> 16) & 255;
+      msg[salt.length + 2] = (idx >>> 8) & 255; msg[salt.length + 3] = idx & 255;
+      var u = hmacSha256(password, msg);
+      var t = new Uint8Array(u);
+      for (var i = 1; i < iterations; i++) {
+        u = hmacSha256(password, u);
+        for (var j = 0; j < 32; j++) t[j] ^= u[j];
+      }
+      out.set(t, bi * 32);
+    }
+    return out.subarray(0, dklen);
+  }
+
+  function keystream(encKey, nonce, length) {
+    var out = new Uint8Array(length);
+    var msg = new Uint8Array(nonce.length + 4);
+    msg.set(nonce);
+    for (var i = 0; i * 32 < length; i++) {
+      msg[nonce.length] = (i >>> 24) & 255; msg[nonce.length + 1] = (i >>> 16) & 255;
+      msg[nonce.length + 2] = (i >>> 8) & 255; msg[nonce.length + 3] = i & 255;
+      var b = hmacSha256(encKey, msg);
+      out.set(b.subarray(0, Math.min(32, length - i * 32)), i * 32);
+    }
+    return out;
+  }
+
+  function macOf(macKey, salt, nonce, ct) {
+    var m = new Uint8Array(salt.length + nonce.length + ct.length);
+    m.set(salt); m.set(nonce, salt.length); m.set(ct, salt.length + nonce.length);
+    return hmacSha256(macKey, m);
+  }
+
+  function constEq(a, b) {                      // constant-time compare
+    if (a.length !== b.length) return false;
+    var d = 0;
+    for (var i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+    return d === 0;
+  }
+
+  var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function b64decode(s) {                       // no atob dependence (works anywhere)
+    s = String(s).replace(/[^A-Za-z0-9+/]/g, "");
+    var out = new Uint8Array(Math.floor(s.length * 3 / 4)), o = 0, buf = 0, bits = 0;
+    for (var i = 0; i < s.length; i++) {
+      buf = (buf << 6) | B64.indexOf(s.charAt(i));
+      bits += 6;
+      if (bits >= 8) { bits -= 8; out[o++] = (buf >> bits) & 255; }
+    }
+    return out.subarray(0, o);
+  }
+  function b64encode(bytes) {
+    var out = "", i;
+    for (i = 0; i + 2 < bytes.length; i += 3) {
+      var n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+      out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + B64[(n >> 6) & 63] + B64[n & 63];
+    }
+    var rem = bytes.length - i;
+    if (rem === 1) { out += B64[(bytes[i] >> 2) & 63] + B64[(bytes[i] << 4) & 63] + "=="; }
+    else if (rem === 2) {
+      var m = (bytes[i] << 8) | bytes[i + 1];
+      out += B64[(m >> 10) & 63] + B64[(m >> 4) & 63] + B64[(m << 2) & 63] + "=";
+    }
+    return out;
+  }
+  function utf8(str) {                          // UTF-8 encode without TextEncoder
+    str = String(str);
+    var out = [];
+    for (var i = 0; i < str.length; i++) {
+      var c = str.codePointAt(i);
+      if (c > 0xffff) i++;
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return new Uint8Array(out);
+  }
+  function utf8decode(bytes) {
+    var out = "", i = 0;
+    while (i < bytes.length) {
+      var b = bytes[i++], c;
+      if (b < 0x80) c = b;
+      else if (b < 0xe0) c = ((b & 31) << 6) | (bytes[i++] & 63);
+      else if (b < 0xf0) c = ((b & 15) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63);
+      else c = ((b & 7) << 18) | ((bytes[i++] & 63) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63);
+      if (c > 0xffff) { c -= 0x10000; out += String.fromCharCode(0xd800 + (c >> 10), 0xdc00 + (c & 0x3ff)); }
+      else out += String.fromCharCode(c);
+    }
+    return out;
+  }
+  function hex(bytes) {
+    var s = "";
+    for (var i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? "0" : "") + bytes[i].toString(16);
+    return s;
+  }
+  function unhex(s) {
+    var out = new Uint8Array(s.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+    return out;
+  }
+
+  // Verify MAC (constant-time) then decrypt; returns JSON string or null on MAC fail.
+  function verifyAndDecrypt(encKey, macKey, blob) {
+    var salt = b64decode(blob.salt), nonce = b64decode(blob.nonce);
+    var ct = b64decode(blob.ct), mac = b64decode(blob.mac);
+    if (!constEq(macOf(macKey, salt, nonce, ct), mac)) return null;   // wrong password
+    var ks = keystream(encKey, nonce, ct.length);
+    var pt = new Uint8Array(ct.length);
+    for (var i = 0; i < ct.length; i++) pt[i] = ct[i] ^ ks[i];
+    return utf8decode(pt);
+  }
+
+  g.__journalCrypto = {
+    sha256: sha256, hmacSha256: hmacSha256,
+    pbkdf2Async: pbkdf2Async, pbkdf2Sync: pbkdf2Sync,
+    keystream: keystream, macOf: macOf, constEq: constEq,
+    b64decode: b64decode, b64encode: b64encode,
+    utf8: utf8, utf8decode: utf8decode, hex: hex, unhex: unhex,
+    verifyAndDecrypt: verifyAndDecrypt
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+/* __JOURNAL_CRYPTO_END__ */
+</script>
 <script>
 // ── DATA CONTRACT ──────────────────────────────────────────────────────────
 // JOURNALS shape (what window.SWING_JOURNALS / journal_data.js must provide).
@@ -1458,6 +1814,482 @@ function loadJournals() {
   buildChips();
   applyMode();
   renderAll();
+})();
+</script>
+
+<script id="journal-section">
+// ── 💰 Trade Journal section ─────────────────────────────────────────────────
+// Decrypts window.SWING_JOURNAL_LOCKED client-side (pure JS crypto above; no
+// crypto.subtle — works over file:// and plain http on a LAN IP). This section
+// has its own range chips; the top-of-page date selector does NOT affect it.
+(function () {
+  "use strict";
+  var C = window.__journalCrypto;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var blob = (window.SWING_JOURNAL_LOCKED && window.SWING_JOURNAL_LOCKED.ct) ? window.SWING_JOURNAL_LOCKED : null;
+  var LS_KEY = "journalDashKeysV1";
+  var body = $("jrBody");
+  var journal = null;          // decrypted journal object
+  var range = "all";           // All is the default range (matches the app)
+  var remembered = false;      // was "remember this device" on at unlock time
+
+  // ── formatting ──────────────────────────────────────────
+  function commas(v, dp) {
+    return Number(v).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
+  function money(v, dp) {            // "+$2,213.72" / "-$110.25"
+    if (v == null) return "—";
+    if (dp == null) dp = 2;
+    return (v < 0 ? "-$" : "+$") + commas(Math.abs(v), dp);
+  }
+  function moneyPlain(v, dp) {       // "$17,340"
+    if (v == null) return "—";
+    if (dp == null) dp = 0;
+    return (v < 0 ? "-$" : "$") + commas(Math.abs(v), dp);
+  }
+  function dollarSigned(v) {         // "$+378.38" (app card style)
+    if (v == null) return "—";
+    return "$" + (v < 0 ? "-" : "+") + commas(Math.abs(v), 2);
+  }
+  function pctS(v, dp) {
+    if (v == null) return "—";
+    return (v > 0 ? "+" : "") + Number(v).toFixed(dp == null ? 2 : dp) + "%";
+  }
+  function pct0(v) { return v == null ? "—" : Math.round(v) + "%"; }
+  function upDown(v) { return v > 0 ? "up" : v < 0 ? "down" : "flat"; }
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function monLabel(m, withYear) {   // "2026-03" -> "Mar" / "Mar 26"
+    var mo = MON[parseInt(String(m).slice(5, 7), 10) - 1];
+    if (!mo) return String(m);
+    return withYear ? mo + " " + String(m).slice(2, 4) : mo;
+  }
+
+  // ── SVG helpers (values use CSS vars so both skins recolor automatically) ──
+  function svgOpen(w, h) {
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '" role="img">';
+  }
+  function txt(x, y, s, o) {
+    o = o || {};
+    return '<text x="' + x + '" y="' + y + '"' + (o.anchor ? ' text-anchor="' + o.anchor + '"' : "") +
+      ' style="font:' + (o.bold ? "bold " : "") + (o.size || 10) + 'px Arial,Helvetica,sans-serif;fill:' +
+      (o.fill || "var(--jr-muted)") + '">' + s + "</text>";
+  }
+  function rect(x, y, w, h, fill, tip) {
+    return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) +
+      '" style="fill:' + fill + '"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + "/>";
+  }
+  function hline(x1, x2, y, stroke, dash) {
+    return '<line x1="' + x1 + '" y1="' + y.toFixed(1) + '" x2="' + x2 + '" y2="' + y.toFixed(1) +
+      '" style="stroke:' + stroke + ';stroke-width:1"' + (dash ? ' stroke-dasharray="3,3"' : "") + "/>";
+  }
+  function emptyChart(msg) { return '<div class="empty">' + esc(msg || "no data in range") + "</div>"; }
+
+  // a. P/L split by strategy — one horizontal proportion bar (NOT a pie)
+  // cw = measured container width so the end labels never clip in the card.
+  function chartSplit(w, cw) {
+    var sp = (w.charts && w.charts.split) || {};
+    var sw = sp.swing || 0, lp = sp.leap || 0;
+    var a = Math.abs(sw), b = Math.abs(lp), tot = a + b;
+    if (!tot) return emptyChart("no closed P/L in range");
+    var W = Math.max(300, cw || 500), H = 58, x0 = 4, bw = W - 8, y = 22, h = 15;
+    var swW = bw * a / tot;
+    var pa = Math.round(a / tot * 100), pb = 100 - pa;
+    var s = svgOpen(W, H);
+    if (a) s += rect(x0, y, swW, h, "var(--jr-sw)", "<b>Swing</b><br>P/L " + money(sw) + " · " + pa + "% of |P/L|");
+    if (b) s += rect(x0 + swW, y, bw - swW, h, "var(--jr-lp)", "<b>LEAP</b><br>P/L " + money(lp) + " · " + pb + "% of |P/L|");
+    s += txt(x0, 14, "Swing " + dollarSigned(sw) + " (" + pa + "%)", { fill: "var(--jr-sw)", bold: true, size: 11 });
+    s += txt(x0 + bw, H - 6, "LEAP " + dollarSigned(lp) + " (" + pb + "%)", { anchor: "end", fill: "var(--jr-lp)", bold: true, size: 11 });
+    return s + "</svg>";
+  }
+
+  // b. Monthly P/L — stacked bars, negatives below the zero line
+  function chartMonthly(w) {
+    var rows = (w.charts && w.charts.monthly) || [];
+    if (!rows.length) return emptyChart();
+    var posMax = 0, negMin = 0;
+    rows.forEach(function (r) {
+      posMax = Math.max(posMax, Math.max(r.swing || 0, 0) + Math.max(r.leap || 0, 0));
+      negMin = Math.min(negMin, Math.min(r.swing || 0, 0) + Math.min(r.leap || 0, 0));
+    });
+    var padT = 14, padB = 20, H = 170, plotH = H - padT - padB;
+    var scale = plotH / ((posMax - negMin) || 1);
+    var zeroY = padT + posMax * scale;
+    var slot = 46, barW = 26, x0 = 8;
+    var W = Math.max(300, x0 * 2 + rows.length * slot);
+    var s = svgOpen(W, H);
+    rows.forEach(function (r, i) {
+      var cx = x0 + i * slot + (slot - barW) / 2;
+      var net = (r.swing || 0) + (r.leap || 0);
+      var tip = "<b>" + esc(monLabel(r.m, true)) + "</b><br>Swing " + money(r.swing || 0) +
+        "<br>LEAP " + money(r.leap || 0) + "<br>Net " + money(net);
+      var upC = zeroY, dnC = zeroY;
+      [["swing", "var(--jr-sw)"], ["leap", "var(--jr-lp)"]].forEach(function (cfg) {
+        var v = r[cfg[0]] || 0;
+        if (!v) return;
+        var hh = Math.max(Math.abs(v) * scale, 0.75);
+        if (v > 0) { upC -= hh; s += rect(cx, upC, barW, hh, cfg[1], tip); }
+        else { s += rect(cx, dnC, barW, hh, cfg[1], tip); dnC += hh; }
+      });
+      s += txt(cx + barW / 2, H - 6, esc(monLabel(r.m, i === 0)), { anchor: "middle", size: 9.5 });
+    });
+    s += hline(2, W - 2, zeroY, "var(--jr-axis)");
+    return s + "</svg>";
+  }
+
+  // c. Daily/Weekly P/L — sign-colored bars; only extremes labeled directly
+  function chartPeriod(w) {
+    var pp = (w.charts && w.charts.periodPL) || {};
+    var bars = pp.bars || [];
+    if (!bars.length) return emptyChart();
+    var maxV = 0, minV = 0, maxI = -1, minI = -1;
+    bars.forEach(function (b, i) {
+      if ((b.v || 0) > maxV) { maxV = b.v; maxI = i; }
+      if ((b.v || 0) < minV) { minV = b.v; minI = i; }
+    });
+    var padT = 16, padB = 30, H = 160, plotH = H - padT - padB;
+    var scale = plotH / ((Math.max(maxV, 0) - Math.min(minV, 0)) || 1);
+    var zeroY = padT + Math.max(maxV, 0) * scale;
+    var slot = bars.length > 36 ? 12 : bars.length > 18 ? 18 : 26;
+    var barW = Math.max(3, slot - 4), x0 = 8;
+    var W = Math.max(300, x0 * 2 + bars.length * slot);
+    var s = svgOpen(W, H);
+    var lblStep = Math.max(1, Math.ceil(bars.length / 6));
+    bars.forEach(function (b, i) {
+      var v = b.v || 0;
+      var cx = x0 + i * slot + (slot - barW) / 2;
+      var hh = Math.max(Math.abs(v) * scale, v === 0 ? 0.5 : 0.75);
+      var y = v >= 0 ? zeroY - hh : zeroY;
+      var key = String(b.k);
+      s += rect(cx, y, barW, hh, v >= 0 ? "var(--jr-pos)" : "var(--jr-neg)",
+        "<b>" + esc(key) + "</b><br>" + money(v) + (b.pct != null ? " (" + pctS(b.pct, 2) + ")" : ""));
+      if (i % lblStep === 0 || i === bars.length - 1)
+        s += txt(cx + barW / 2, H - 6, esc(key.replace(/^\d{4}-/, "")), { anchor: "middle", size: 8.5 });
+    });
+    s += hline(2, W - 2, zeroY, "var(--jr-axis)");
+    if (maxI >= 0 && maxV > 0) {
+      var mx = x0 + maxI * slot + slot / 2;
+      s += txt(Math.min(Math.max(mx, 26), W - 26), zeroY - maxV * scale - 4, money(maxV, 0),
+        { anchor: "middle", size: 9.5, bold: true, fill: "var(--jr-pos)" });
+    }
+    if (minI >= 0 && minV < 0) {
+      var mn = x0 + minI * slot + slot / 2;
+      s += txt(Math.min(Math.max(mn, 26), W - 26), zeroY - minV * scale + 11, money(minV, 0),
+        { anchor: "middle", size: 9.5, bold: true, fill: "var(--jr-neg)" });
+    }
+    return s + "</svg>";
+  }
+
+  // d. Win rate by strategy — two thin bars (null strategy skipped)
+  function chartWinRate(w, cw) {
+    var wr = (w.charts && w.charts.winRateBy) || {};
+    var rows = [["Swing", wr.swing, "var(--jr-sw)"], ["LEAP", wr.leap, "var(--jr-lp)"]]
+      .filter(function (r) { return r[1] != null; });
+    if (!rows.length) return emptyChart();
+    var W = Math.max(300, cw || 460), labelW = 50, track = W - labelW - 60, rowH = 26;
+    var H = rows.length * rowH + 10;
+    var s = svgOpen(W, H);
+    s += '<line x1="' + (labelW + track / 2) + '" y1="4" x2="' + (labelW + track / 2) + '" y2="' + (H - 6) +
+      '" style="stroke:var(--jr-grid);stroke-width:1"/>';
+    rows.forEach(function (r, i) {
+      var y = 8 + i * rowH;
+      s += txt(labelW - 6, y + 9, esc(r[0]), { anchor: "end", size: 10.5, bold: true, fill: "var(--jr-fg)" });
+      s += rect(labelW, y, track, 11, "var(--jr-grid)");
+      s += rect(labelW, y, Math.max(track * Math.min(r[1], 100) / 100, 0.5), 11, r[2],
+        "<b>" + esc(r[0]) + "</b><br>win rate " + Math.round(r[1]) + "%");
+      s += txt(labelW + track + 8, y + 10, Math.round(r[1]) + "%", { size: 11, bold: true, fill: r[2] });
+    });
+    return s + "</svg>";
+  }
+
+  // e. Cumulative P/L — two step-lines with end-point labels + legend
+  function chartCumulative(w, cw) {
+    var cu = (w.charts && w.charts.cumulative) || {};
+    var series = [["Swing", cu.swing || [], "var(--jr-sw)"], ["LEAP", cu.leap || [], "var(--jr-lp)"]]
+      .filter(function (sr) { return sr[1].length; });
+    if (!series.length) return emptyChart();
+    var minT = Infinity, maxT = -Infinity, minV = 0, maxV = 0;
+    series.forEach(function (sr) {
+      sr[1].forEach(function (p) {
+        var t = Date.parse(p[0] + "T00:00:00Z");
+        minT = Math.min(minT, t); maxT = Math.max(maxT, t);
+        minV = Math.min(minV, p[1]); maxV = Math.max(maxV, p[1]);
+      });
+    });
+    var W = Math.max(380, cw || 500), H = 180, padL = 8, padR = 88, padT = 20, padB = 16;
+    var spanT = (maxT - minT) || 1, spanV = (maxV - minV) || 1;
+    var X = function (t) { return padL + (t - minT) / spanT * (W - padL - padR); };
+    var Y = function (v) { return padT + (maxV - v) / spanV * (H - padT - padB); };
+    var s = svgOpen(W, H);
+    s += hline(2, W - 2, Y(0), "var(--jr-axis)", true);
+    var endLbls = [];
+    series.forEach(function (sr) {
+      var pts = sr[1], d = "";
+      pts.forEach(function (p, i) {
+        var x = X(Date.parse(p[0] + "T00:00:00Z")), y = Y(p[1]);
+        d += i === 0 ? "M" + x.toFixed(1) + " " + y.toFixed(1)
+                     : "H" + x.toFixed(1) + "V" + y.toFixed(1);      // step-after
+      });
+      s += '<path d="' + d + '" style="fill:none;stroke:' + sr[2] + ';stroke-width:2" stroke-linejoin="round"/>';
+      pts.forEach(function (p) {
+        s += '<circle cx="' + X(Date.parse(p[0] + "T00:00:00Z")).toFixed(1) + '" cy="' + Y(p[1]).toFixed(1) +
+          '" r="2.4" style="fill:' + sr[2] + '" data-tip="' +
+          esc("<b>" + esc(p[0]) + "</b><br>" + sr[0] + " cumulative " + money(p[1])) + '"/>';
+      });
+      var last = pts[pts.length - 1];
+      endLbls.push({ y: Y(last[1]), txt: sr[0] + " " + money(last[1], 0), fill: sr[2] });
+    });
+    if (endLbls.length === 2 && Math.abs(endLbls[0].y - endLbls[1].y) < 12) {  // un-overlap
+      if (endLbls[0].y <= endLbls[1].y) { endLbls[0].y -= 6; endLbls[1].y += 6; }
+      else { endLbls[0].y += 6; endLbls[1].y -= 6; }
+    }
+    endLbls.forEach(function (l) {
+      s += txt(W - padR + 6, Math.max(10, Math.min(H - 4, l.y + 3.5)), esc(l.txt), { size: 10, bold: true, fill: l.fill });
+    });
+    s += rect(padL, 6, 8, 8, "var(--jr-sw)") + txt(padL + 12, 13, "Swing", { size: 9.5 });
+    s += rect(padL + 52, 6, 8, 8, "var(--jr-lp)") + txt(padL + 64, 13, "LEAP", { size: 9.5 });
+    return s + "</svg>";
+  }
+
+  // ── stat cards ──────────────────────────────────────────
+  function statCards(w) {
+    var t = w.totals || {}, wr = w.winRate || {}, sw = w.swing || {}, lp = w.leap || {};
+    var alloc = sw.allocation != null ? sw.allocation : journal.allocation;
+    var h = '<div class="jr-stats">';
+    h += '<div class="jr-stat"><div class="jr-k">Total P/L</div>' +
+      '<div class="jr-v ' + upDown(t.pl) + '">' + money(t.pl) +
+      ' <span class="jr-vp">(' + pctS(t.pct, 2) + ")</span></div>" +
+      '<div class="jr-s">' + (t.trades != null ? t.trades : "—") + " trades on " + moneyPlain(t.costBasis) + " cost basis</div></div>";
+    h += '<div class="jr-stat"><div class="jr-k">Win Rate</div>' +
+      '<div class="jr-v">' + pct0(wr.pct) + "</div>" +
+      '<div class="jr-s">' + (wr.w != null ? wr.w : "—") + "W / " + (wr.l != null ? wr.l : "—") + "L</div></div>";
+    var bMode = sw.badge === "ok" ? "ok" : sw.badge === "losing" ? "losing" : "below";
+    var bTail = bMode === "ok" ? "✓ ≥ 3%" : bMode === "losing" ? "✗ losing" : "△ below 3%";
+    h += '<div class="jr-stat wide"><div class="jr-k">Swing Trader</div>' +
+      '<div class="jr-v ' + upDown(sw.pl) + '">' + dollarSigned(sw.pl) + "</div>" +
+      '<div class="jr-s">' + (sw.count != null ? sw.count : "—") + " trades · " + pct0(sw.wr) + " win rate</div>" +
+      '<div class="jr-s">' + moneyPlain(sw.avgDeployed) + " deployed · " +
+        (sw.turnover != null ? sw.turnover.toFixed(1) : "—") + "× turn · " + moneyPlain(alloc) + " sleeve → " +
+        pctS(sw.moSleeve, 2) + "/mo</div>" +
+      (sw.moDeployed != null
+        ? '<div class="jr-badge ' + bMode + '">' + pctS(sw.moDeployed, 2) + "/mo on capital at risk " + bTail + "</div>"
+        : "") + "</div>";
+    h += '<div class="jr-stat wide"><div class="jr-k">LEAP Strategy</div>' +
+      '<div class="jr-v ' + upDown(lp.pl) + '">' + dollarSigned(lp.pl) + "</div>" +
+      '<div class="jr-s">' + (lp.count != null ? lp.count : "—") + " trades · " + pct0(lp.wr) + " win rate</div>" +
+      '<div class="jr-s">Deployed: ' + moneyPlain(lp.avgDeployed) + " · " +
+        (lp.turnover != null ? lp.turnover.toFixed(1) : "—") + "× turnover</div>" +
+      '<div class="jr-s">' + (lp.moDeployed != null ? pctS(lp.moDeployed, 2) + "/mo deployed" : "—") + "</div></div>";
+    return h + "</div>";
+  }
+
+  // ── recent trades table ─────────────────────────────────
+  function tradesTable(w) {
+    var rows = w.trades || [];
+    if (!rows.length) return '<div class="empty">no closed trades in range</div>';
+    var h = '<div class="tblwrap jr-tblwrap"><table><thead><tr>' +
+      '<th class="cl">Date</th><th class="cl">Ticker</th><th class="cl">Strat</th><th>Qty</th>' +
+      "<th>Buy→Sell</th><th>P/L $</th><th>P/L %</th><th>Held</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      var ex = r.m === "Excluded";
+      var chip = ex ? '<span class="jr-schip ex">excl</span>'
+        : r.m === "LEAP Strategy" ? '<span class="jr-schip lp">LEAP</span>'
+        : '<span class="jr-schip sw">Swing</span>';
+      h += "<tr" + (ex ? ' class="jr-excl"' : "") + ">" +
+        "<td>" + esc(r.d) + "</td>" +
+        '<td class="cl tk-cell">' + esc(r.t) + (r.opt ? ' <span class="jr-schip opt">opt</span>' : "") + "</td>" +
+        '<td class="cl">' + chip + "</td>" +
+        '<td class="num">' + esc(r.qty) + "</td>" +
+        '<td class="num">$' + commas(r.buy, 2) + " → $" + commas(r.sell, 2) + "</td>" +
+        '<td class="num ' + (ex ? "" : upDown(r.pl)) + '"><b>' + money(r.pl) + "</b></td>" +
+        '<td class="num ' + (ex ? "" : upDown(r.plPct)) + '">' + pctS(r.plPct, 1) + "</td>" +
+        '<td class="num">' + (r.held != null ? r.held + "d" : "—") + "</td></tr>";
+    });
+    return h + "</tbody></table></div>";
+  }
+
+  // ── section states ──────────────────────────────────────
+  function lockState(st) {
+    var ico = $("jrLockIco"), sub = $("jrSub");
+    if (ico) ico.textContent = st === "locked" ? "🔒" : st === "open" ? "🔓" : "";
+    if (sub) sub.textContent = st === "locked" ? "🔒 password-protected · encrypted at rest"
+      : st === "open" ? "decrypted locally · own range chips (date selector above does not apply)"
+      : "not configured";
+  }
+
+  function renderNotConfigured() {
+    lockState("none");
+    body.innerHTML = '<div class="jr-notecard">Trade Journal not configured — create ' +
+      "<b>~/.journal_dashboard_key</b> and re-run <b>build_journal_data.py</b> (see README).</div>";
+  }
+
+  function renderLocked() {
+    lockState("locked");
+    body.innerHTML =
+      '<div class="jr-lockcard" id="jrLockCard">' +
+        '<div class="jr-locktitle">🔒 Trade Journal is locked</div>' +
+        '<form class="jr-form" id="jrForm">' +
+          '<input type="password" id="jrPass" placeholder="Password" autocomplete="current-password" aria-label="Journal password">' +
+          '<button type="submit" id="jrUnlockBtn">Unlock</button>' +
+        "</form>" +
+        '<label class="jr-remember"><input type="checkbox" id="jrRemember"> remember this device</label>' +
+        '<div class="jr-err" id="jrErr" role="alert">Wrong password</div>' +
+        '<div class="jr-note">encrypted at rest — wrong password reveals nothing</div>' +
+      "</div>";
+    $("jrForm").addEventListener("submit", onUnlockSubmit);
+  }
+
+  function onUnlockSubmit(e) {
+    e.preventDefault();
+    var pass = $("jrPass").value;
+    if (!pass) return;
+    var btn = $("jrUnlockBtn"), inp = $("jrPass");
+    btn.disabled = true; inp.disabled = true;
+    btn.textContent = "Unlocking…";
+    $("jrErr").style.display = "none";
+    $("jrLockCard").classList.remove("jr-shake");
+    // PBKDF2 runs chunked (setTimeout between chunks) so the disabled
+    // "Unlocking…" state paints before/while the key derivation grinds.
+    setTimeout(function () {
+      C.pbkdf2Async(pass, C.b64decode(blob.salt), blob.iter || 60000, 64, function (dk) {
+        var encKey = new Uint8Array(dk.subarray(0, 32));
+        var macKey = new Uint8Array(dk.subarray(32, 64));
+        var pt = C.verifyAndDecrypt(encKey, macKey, blob);   // MAC checked (const-time) before decrypt
+        if (pt === null) {                                    // MAC mismatch = wrong password
+          btn.disabled = false; inp.disabled = false;
+          btn.textContent = "Unlock";
+          inp.value = ""; try { inp.focus(); } catch (err) {}
+          $("jrErr").style.display = "block";
+          void $("jrLockCard").offsetWidth;                   // restart shake animation
+          $("jrLockCard").classList.add("jr-shake");
+          return;
+        }
+        var parsed;
+        try { parsed = JSON.parse(pt); }
+        catch (err) {
+          btn.disabled = false; inp.disabled = false; btn.textContent = "Unlock";
+          $("jrErr").textContent = "Decryption succeeded but data is corrupt — re-run build_journal_data.py";
+          $("jrErr").style.display = "block";
+          return;
+        }
+        journal = parsed;
+        remembered = $("jrRemember").checked;
+        if (remembered) {
+          try {
+            localStorage.setItem(LS_KEY, JSON.stringify(
+              { salt: blob.salt, encKeyHex: C.hex(encKey), macKeyHex: C.hex(macKey) }));
+          } catch (err) {}
+        }
+        renderUnlocked();
+      }, function (done, total) {
+        btn.textContent = "Unlocking… " + Math.min(99, Math.round(done / total * 100)) + "%";
+      });
+    }, 30);
+  }
+
+  function renderUnlocked() {
+    lockState("open");
+    var wins = journal.windows || {};
+    if (!wins[range]) range = wins.all ? "all" : Object.keys(wins)[0];
+    var w = wins[range] || {};
+    var pp = (w.charts && w.charts.periodPL) || {};
+    var chips = [["30d", "30d"], ["90d", "90d"], ["ytd", "YTD"], ["all", "All"]].map(function (c) {
+      return '<button type="button" class="jr-rchip" data-r="' + c[0] + '" aria-pressed="' +
+        (range === c[0]) + '"' + (wins[c[0]] ? "" : " disabled") + ">" + c[1] + "</button>";
+    }).join("");
+    var counts = journal.counts || {};
+    var html =
+      '<div class="jr-toolbar">' + chips + '<a href="#" class="jr-lock" id="jrLockLink">Lock</a>' +
+      (remembered ? ' <a href="#" class="jr-lock" id="jrForgetLink" title="Remove the saved key from this browser and lock">Lock &amp; forget device</a>' : "") + "</div>" +
+      statCards(w) +
+      '<div class="jr-charts">' +
+        '<div class="jr-chart"><div class="jr-ct">P/L split by strategy <span class="jr-cs">share of |P/L|</span></div><div class="jr-cw" id="jrCwSplit"></div></div>' +
+        '<div class="jr-chart"><div class="jr-ct">Monthly P/L <span class="jr-cs">stacked · swing green / LEAP blue</span></div><div class="jr-cw">' + chartMonthly(w) + "</div></div>" +
+        '<div class="jr-chart"><div class="jr-ct">' + (pp.mode === "weekly" ? "Weekly" : "Daily") + ' P/L <span class="jr-cs">by sell ' + (pp.mode === "weekly" ? "week" : "day") + "</span></div>" + '<div class="jr-cw">' + chartPeriod(w) + "</div></div>" +
+        '<div class="jr-chart"><div class="jr-ct">Win rate by strategy</div><div class="jr-cw" id="jrCwWin"></div></div>' +
+        '<div class="jr-chart"><div class="jr-ct">Cumulative P/L <span class="jr-cs">running by sell date</span></div><div class="jr-cw" id="jrCwCum"></div></div>' +
+      "</div>" +
+      '<div class="jr-tradeshdr">Recent trades <span class="jr-cs">(' + (w.trades ? w.trades.length : 0) + " shown · newest first)</span></div>" +
+      tradesTable(w) +
+      '<div class="jr-foot">' +
+        (counts.closed != null ? counts.closed : "—") + " closed · " +
+        (counts.open != null ? counts.open : "—") + " open · ⚠ " +
+        (counts.orphans != null ? counts.orphans : 0) + " orphan sells · source: " +
+        esc(journal.sourceCsv || "—") + " · computed " + esc(journal.generated || "—") +
+      "</div>";
+    body.innerHTML = html;
+    // Fixed-layout charts (split / win rate / cumulative) are sized to the
+    // measured card width so their end labels never clip. When the card has
+    // no layout yet (collapsed mobile <details>), the chart falls back to a
+    // safe minimum and is re-rendered on the section's next toggle/resize.
+    var cw = $("jrCwSplit").clientWidth || 0;
+    $("jrCwSplit").innerHTML = chartSplit(w, cw);
+    $("jrCwWin").innerHTML = chartWinRate(w, cw);
+    $("jrCwCum").innerHTML = chartCumulative(w, cw);
+    body.querySelectorAll(".jr-rchip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (b.disabled || b.dataset.r === range) return;
+        range = b.dataset.r;
+        renderUnlocked();
+      });
+    });
+    $("jrLockLink").addEventListener("click", function (e) {
+      e.preventDefault();
+      journal = null;
+      if (!remembered) { try { localStorage.removeItem(LS_KEY); } catch (err) {} }
+      renderLocked();
+    });
+    var forget = $("jrForgetLink");
+    if (forget) forget.addEventListener("click", function (e) {
+      e.preventDefault();
+      journal = null;
+      remembered = false;
+      try { localStorage.removeItem(LS_KEY); } catch (err) {}
+      renderLocked();
+    });
+  }
+
+  // "Remember this device": derived keys only (never the password, never plaintext).
+  // Auto-unlock only when the stored salt matches the blob's salt; a differing salt
+  // means the journal was re-encrypted (password change) — drop the stale keys.
+  function tryAutoUnlock() {
+    var raw = null;
+    try { raw = localStorage.getItem(LS_KEY); } catch (e) { return false; }
+    if (!raw) return false;
+    try {
+      var st = JSON.parse(raw);
+      if (!st || st.salt !== blob.salt || !st.encKeyHex || !st.macKeyHex) {
+        try { localStorage.removeItem(LS_KEY); } catch (e2) {}
+        return false;
+      }
+      var pt = C.verifyAndDecrypt(C.unhex(st.encKeyHex), C.unhex(st.macKeyHex), blob);
+      if (pt === null) { try { localStorage.removeItem(LS_KEY); } catch (e3) {} return false; }
+      journal = JSON.parse(pt);
+      remembered = true;
+      return true;
+    } catch (e4) { return false; }
+  }
+
+  // ── init ────────────────────────────────────────────────
+  if (!body) return;
+  if (!blob) renderNotConfigured();          // (also the sample-data mode — never fabricate journal numbers)
+  else if (tryAutoUnlock()) renderUnlocked();
+  else renderLocked();
+
+  // Re-fit measured-width charts when the section (re)opens on mobile or the
+  // viewport size / skin changes while unlocked.
+  var sec = $("sec-journal");
+  function refit() { if (journal && sec && sec.open && body.querySelector(".jr-stats")) renderUnlocked(); }
+  if (sec) sec.addEventListener("toggle", function () { if (sec.open) refit(); });
+  var rzT = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(rzT);
+    rzT = setTimeout(refit, 180);
+  });
 })();
 </script>
 </body>

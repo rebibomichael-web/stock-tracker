@@ -25,11 +25,17 @@ Run after a scan:
 """
 
 import argparse
+import base64
 import csv
 import datetime as dt
+import hashlib
+import hmac
 import json
 import os
+import sqlite3
+import struct
 import sys
+import types
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONFIG — all paths per CONTRACT.md §mappings (override with CLI flags)
@@ -55,6 +61,12 @@ STOP_M    = 2.0
 T1_M      = 2.0
 T2_M      = 3.0
 TIME_STOP = 21      # calendar days -> hardStop; hold text "7-21d"
+
+# ── Trade Journal (locked) section — CONTRACT-JOURNAL.md ──
+JOURNAL_KEY_PATH     = os.path.expanduser("~/.journal_dashboard_key")
+JOURNAL_PBKDF2_ITERS = 60000
+JOURNAL_TRADES_CAP   = 40   # recent-trades table rows per window
+JOURNAL_DAILY_MAX    = 60   # <=60 unique sell days -> daily bars, else ISO-week
 
 # Index strip tickers -> display names (order = display order)
 INDEX_TICKERS = [
@@ -599,6 +611,441 @@ def build_leaps(leap_recs, date_key, quotes):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Trade Journal crypto — CONTRACT-JOURNAL.md §1 (stdlib only, byte-exact
+#  scheme mirrored by the pure-JS decryptor in journal_dashboard.html)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _journal_kdf(password, salt, iters=JOURNAL_PBKDF2_ITERS):
+    """PBKDF2-HMAC-SHA256, dklen=64 -> (enc_key[32], mac_key[32])."""
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iters,
+                             dklen=64)
+    return dk[:32], dk[32:]
+
+
+def _journal_keystream(enc_key, nonce, length):
+    """Keystream block i = HMAC-SHA256(enc_key, nonce || BE_uint32(i))."""
+    out = bytearray()
+    i = 0
+    while len(out) < length:
+        out += hmac.new(enc_key, nonce + struct.pack(">I", i),
+                        hashlib.sha256).digest()
+        i += 1
+    return bytes(out[:length])
+
+
+def encrypt_journal(plaintext, password, salt=None, nonce=None,
+                    iters=JOURNAL_PBKDF2_ITERS):
+    """Encrypt plaintext bytes -> SWING_JOURNAL_LOCKED blob dict.
+    salt/nonce parameters exist for the test vector only; production callers
+    leave them None (os.urandom)."""
+    if salt is None:
+        salt = os.urandom(16)
+    if nonce is None:
+        nonce = os.urandom(16)
+    enc_key, mac_key = _journal_kdf(password, salt, iters)
+    ct = bytes(a ^ b for a, b in
+               zip(plaintext, _journal_keystream(enc_key, nonce, len(plaintext))))
+    mac = hmac.new(mac_key, salt + nonce + ct, hashlib.sha256).digest()
+    b64 = lambda b: base64.b64encode(b).decode("ascii")
+    return {"v": 1, "kdf": "pbkdf2-sha256", "iter": iters,
+            "salt": b64(salt), "nonce": b64(nonce),
+            "ct": b64(ct), "mac": b64(mac)}
+
+
+def decrypt_journal(blob, password):
+    """Verify MAC (constant-time) BEFORE decrypting; raise ValueError on
+    mismatch (= wrong password / tampered blob). Returns plaintext bytes."""
+    salt = base64.b64decode(blob["salt"])
+    nonce = base64.b64decode(blob["nonce"])
+    ct = base64.b64decode(blob["ct"])
+    mac = base64.b64decode(blob["mac"])
+    enc_key, mac_key = _journal_kdf(password, salt,
+                                    int(blob.get("iter", JOURNAL_PBKDF2_ITERS)))
+    expect = hmac.new(mac_key, salt + nonce + ct, hashlib.sha256).digest()
+    if not hmac.compare_digest(expect, mac):
+        raise ValueError("MAC mismatch — wrong password or corrupted blob")
+    return bytes(a ^ b for a, b in
+                 zip(ct, _journal_keystream(enc_key, nonce, len(ct))))
+
+
+def resolve_journal_password(args):
+    """Password source, first match wins (CONTRACT-JOURNAL.md §1):
+    --journal-password · --journal-password-file · env JOURNAL_DASH_PASSWORD
+    · default file ~/.journal_dashboard_key. Returns str or None."""
+    if args.journal_password:
+        return args.journal_password
+    if args.journal_password_file:
+        try:
+            with open(args.journal_password_file, "r", encoding="utf-8") as f:
+                pw = f.read().strip()
+            if pw:
+                return pw
+            warn(f"journal password file {args.journal_password_file} is empty")
+        except OSError as e:
+            warn(f"journal password file unreadable: {e}")
+    env_pw = os.environ.get("JOURNAL_DASH_PASSWORD", "").strip()
+    if env_pw:
+        return env_pw
+    if os.path.isfile(JOURNAL_KEY_PATH):
+        try:
+            mode = os.stat(JOURNAL_KEY_PATH).st_mode & 0o777
+            if mode != 0o600:
+                warn(f"{JOURNAL_KEY_PATH} permissions are {mode:o}, expected 600 "
+                     f"— fix with: chmod 600 {JOURNAL_KEY_PATH}")
+            with open(JOURNAL_KEY_PATH, "r", encoding="utf-8") as f:
+                pw = f.read().strip()
+            if pw:
+                return pw
+            warn(f"{JOURNAL_KEY_PATH} is empty")
+        except OSError as e:
+            warn(f"{JOURNAL_KEY_PATH} unreadable: {e}")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Trade Journal computation — REUSES trade_journal.py (headless import with
+#  GUI-dep stubs), CONTRACT-JOURNAL.md §2. Every failure -> WARN + skip.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _stub_module(name, **attrs):
+    mod = types.ModuleType(name)
+    for k, v in attrs.items():
+        setattr(mod, k, v)
+    sys.modules[name] = mod
+    return mod
+
+
+def _prepare_gui_stubs():
+    """Pre-inject minimal stubs for trade_journal.py's GUI-only imports —
+    ONLY where the real import fails. pandas must be real (not stubbed)."""
+    os.environ.setdefault("MPLBACKEND", "Agg")
+
+    # tkinter (+ttk/filedialog/messagebox)
+    try:
+        import tkinter, tkinter.ttk, tkinter.filedialog, tkinter.messagebox  # noqa
+    except Exception:
+        tk_mod = _stub_module("tkinter")
+        for sub in ("ttk", "filedialog", "messagebox"):
+            setattr(tk_mod, sub, _stub_module(f"tkinter.{sub}"))
+
+    # tkcalendar / tkinterdnd2: empty stubs are enough — trade_journal.py wraps
+    # `from tkcalendar import DateEntry` etc. in try/except ImportError, and a
+    # stub without the attribute raises exactly that.
+    for name in ("tkcalendar", "tkinterdnd2"):
+        try:
+            __import__(name)
+        except Exception:
+            _stub_module(name)
+
+    # matplotlib (+pyplot, dates, backends.backend_tkagg, figure)
+    try:
+        import matplotlib  # noqa
+        try:
+            import matplotlib.backends.backend_tkagg  # noqa
+        except Exception:
+            # real matplotlib but no Tk backend: neuter use("TkAgg") and stub
+            # the backend module (only used at class-instantiation time).
+            matplotlib.use = lambda *a, **k: None
+            _stub_module("matplotlib.backends.backend_tkagg",
+                         FigureCanvasTkAgg=object)
+    except Exception:
+        mpl = _stub_module("matplotlib", use=lambda *a, **k: None)
+        mpl.pyplot = _stub_module("matplotlib.pyplot")
+        mpl.dates = _stub_module("matplotlib.dates",
+                                 DateFormatter=lambda *a, **k: None)
+        backends = _stub_module("matplotlib.backends")
+        backends.backend_tkagg = _stub_module(
+            "matplotlib.backends.backend_tkagg", FigureCanvasTkAgg=object)
+        mpl.backends = backends
+        mpl.figure = _stub_module("matplotlib.figure", Figure=object)
+
+
+def import_trade_journal():
+    """Headless import of the user's trade_journal module.
+    sys.path candidates in order: this script's dir, ~/Downloads,
+    ~/trading-src/journal. Raises on failure (caller WARNs + skips)."""
+    for cand in (_SCRIPT_DIR,
+                 os.path.expanduser("~/Downloads"),
+                 os.path.expanduser("~/trading-src/journal")):
+        if os.path.isdir(cand) and cand not in sys.path:
+            sys.path.append(cand)
+    _prepare_gui_stubs()
+    import trade_journal
+    return trade_journal
+
+
+def load_journal_tags(db_path):
+    """{trade_key: method} from the tags DB. Missing file/table -> {}."""
+    if not os.path.isfile(db_path):
+        return {}
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT trade_key, method FROM tags").fetchall()
+        finally:
+            conn.close()
+        return {k: v for k, v in rows}
+    except sqlite3.Error as e:
+        warn(f"journal tags DB unreadable at {db_path}: {e} — no saved tags")
+        return {}
+
+
+def apply_journal_tags(tj, legs, tags):
+    """App tagging rules: saved tag wins (via LEGACY_METHOD_MAP), else
+    trade_journal.default_method_for(leg). Mutates legs in place."""
+    for leg in legs:
+        saved = tags.get(leg["trade_key"])
+        if saved:
+            leg["method"] = tj.LEGACY_METHOD_MAP.get(saved, saved)
+        else:
+            leg["method"] = tj.default_method_for(leg)
+
+
+def _journal_method_block(tj, method, stats_legs, ws, we, allocation):
+    """Per-strategy card block (formulas from _refresh_summary L1543)."""
+    ml = [l for l in stats_legs if l.get("method") == method]
+    pl = sum(l["pl_dollar"] for l in ml)
+    count = len(ml)
+    wins = sum(1 for l in ml if l["pl_dollar"] > 0)
+    wr = (wins / count * 100) if count else 0.0
+    avg_cap = mo_dep = turnover = 0.0
+    if ml and ws is not None and we is not None:
+        avg_cap, mo_dep, turnover = tj.compute_time_weighted_return(ml, ws, we)
+    block = {
+        "pl": round(pl, 2), "count": count, "wr": round(wr, 1),
+        "avgDeployed": round(avg_cap, 2), "moDeployed": round(mo_dep, 2),
+        "turnover": round(turnover, 2),
+    }
+    if method == "Swing Trader":
+        wd = (we - ws).days if (ws is not None and we is not None) else 0
+        mo_sleeve = (tj.monthly_equivalent(pl / allocation, wd)
+                     if (allocation > 0 and wd > 0) else 0.0)
+        block["moSleeve"] = round(mo_sleeve, 2)
+        block["allocation"] = allocation
+        if mo_dep >= tj.SWING_MONTHLY_TARGET_PCT:
+            block["badge"] = "ok"
+        elif mo_dep >= 0:
+            block["badge"] = "below"
+        else:
+            block["badge"] = "losing"
+    return block
+
+
+def _journal_charts(window_legs):
+    """Chart series from closed non-Excluded legs (app's closed-only mode)."""
+    from collections import defaultdict
+
+    # split: P/L by strategy
+    method_pl = defaultdict(float)
+    for l in window_legs:
+        method_pl[l.get("method", "Swing Trader")] += l["pl_dollar"]
+    split = {"swing": round(method_pl.get("Swing Trader", 0.0), 2),
+             "leap": round(method_pl.get("LEAP Strategy", 0.0), 2)}
+
+    # monthly: stacked bars by sell month
+    monthly_pl = defaultdict(lambda: defaultdict(float))
+    for l in window_legs:
+        monthly_pl[l["sell_date"].strftime("%Y-%m")][
+            l.get("method", "Swing Trader")] += l["pl_dollar"]
+    monthly = [{"m": m,
+                "swing": round(monthly_pl[m].get("Swing Trader", 0.0), 2),
+                "leap": round(monthly_pl[m].get("LEAP Strategy", 0.0), 2)}
+               for m in sorted(monthly_pl.keys())]
+
+    # periodPL: daily when <=60 unique sell days, else ISO-week (L1732)
+    day_pl, day_cost = defaultdict(float), defaultdict(float)
+    for l in window_legs:
+        d = l["sell_date"].date()
+        day_pl[d] += l["pl_dollar"]
+        day_cost[d] += l["buy_cost"]
+    sorted_days = sorted(day_pl.keys())
+    bars = []
+    if len(sorted_days) > JOURNAL_DAILY_MAX:
+        mode = "weekly"
+        week_pl, week_cost = defaultdict(float), defaultdict(float)
+        for d in sorted_days:
+            iso = d.isocalendar()
+            wk = f"{iso[0]}-W{iso[1]:02d}"
+            week_pl[wk] += day_pl[d]
+            week_cost[wk] += day_cost[d]
+        for k in sorted(week_pl.keys()):
+            pct = (week_pl[k] / week_cost[k] * 100) if week_cost[k] > 0 else 0.0
+            bars.append({"k": k, "v": round(week_pl[k], 2), "pct": round(pct, 2)})
+    else:
+        mode = "daily"
+        for d in sorted_days:
+            pct = (day_pl[d] / day_cost[d] * 100) if day_cost[d] > 0 else 0.0
+            bars.append({"k": d.strftime("%m/%d"), "v": round(day_pl[d], 2),
+                         "pct": round(pct, 2)})
+    period_pl = {"mode": mode, "bars": bars}
+
+    # winRateBy: pct or null per strategy
+    wr_by = {}
+    for short, method in (("swing", "Swing Trader"), ("leap", "LEAP Strategy")):
+        ml = [l for l in window_legs if l.get("method") == method]
+        if ml:
+            wr_by[short] = round(
+                sum(1 for l in ml if l["pl_dollar"] > 0) / len(ml) * 100, 1)
+        else:
+            wr_by[short] = None
+
+    # cumulative: running P/L by sell date per strategy
+    cumulative = {"swing": [], "leap": []}
+    running = {"Swing Trader": 0.0, "LEAP Strategy": 0.0}
+    key_of = {"Swing Trader": "swing", "LEAP Strategy": "leap"}
+    for l in sorted(window_legs, key=lambda x: x["sell_date"]):
+        m = l.get("method", "Swing Trader")
+        if m not in running:
+            continue
+        running[m] += l["pl_dollar"]
+        cumulative[key_of[m]].append(
+            [l["sell_date"].strftime("%Y-%m-%d"), round(running[m], 2)])
+
+    return {"split": split, "monthly": monthly, "periodPL": period_pl,
+            "winRateBy": wr_by, "cumulative": cumulative}
+
+
+def _journal_window(tj, window_legs_all, ws, we, allocation, counts, src_csv):
+    """One precomputed window. window_legs_all = the window's closed legs
+    INCLUDING Excluded (visible in the trades table); stats/charts use the
+    non-Excluded subset only (per _refresh_summary/_refresh_charts)."""
+    stats = [l for l in window_legs_all
+             if l.get("method") != "Excluded" and not l.get("is_open", False)]
+
+    total_pl = sum(l["pl_dollar"] for l in stats)
+    total_cost = sum(l["buy_cost"] for l in stats)
+    total_pct = (total_pl / total_cost * 100) if total_cost > 0 else 0.0
+    wins = sum(1 for l in stats if l["pl_dollar"] > 0)
+    win_rate = (wins / len(stats) * 100) if stats else 0.0
+
+    trades = []
+    for l in sorted(window_legs_all, key=lambda x: x["sell_date"],
+                    reverse=True)[:JOURNAL_TRADES_CAP]:
+        trades.append({
+            "d": l["sell_date"].strftime("%Y-%m-%d"),
+            "t": l["ticker_label"],
+            "m": l.get("method", "Swing Trader"),
+            "qty": l["qty_str"],
+            "buy": round(l["buy_price"], 2),
+            "sell": round(l["sell_price"], 2),
+            "pl": l["pl_dollar"],
+            "plPct": l["pl_pct"],
+            "held": l["hold_days"],
+            "opt": bool(l.get("is_option")),
+        })
+
+    return {
+        "totals": {"pl": round(total_pl, 2), "pct": round(total_pct, 2),
+                   "trades": len(stats), "costBasis": round(total_cost, 2)},
+        "winRate": {"pct": round(win_rate, 1), "w": wins, "l": len(stats) - wins},
+        "swing": _journal_method_block(tj, "Swing Trader", stats, ws, we, allocation),
+        "leap": _journal_method_block(tj, "LEAP Strategy", stats, ws, we, allocation),
+        "charts": _journal_charts(stats),
+        "trades": trades,
+        "counts": counts,
+        "sourceCsv": src_csv,
+    }
+
+
+def build_journal_payload(tj, closed, opens, orphans, csv_path):
+    """The journal JSON (CONTRACT-JOURNAL.md §2.4-2.6): four windows exactly
+    like _apply_filters (trade_journal.py L1292)."""
+    now = dt.datetime.now()
+    allocation = tj.get_swing_allocation()
+    counts = {"closed": len(closed), "open": len(opens), "orphans": len(orphans)}
+    src_csv = os.path.basename(csv_path)
+
+    windows = {}
+    for key in ("30d", "90d", "ytd", "all"):
+        if key == "30d":
+            ws, we = now - dt.timedelta(days=30), now
+            legs = [l for l in closed if l["sell_date"] >= ws]
+        elif key == "90d":
+            ws, we = now - dt.timedelta(days=90), now
+            legs = [l for l in closed if l["sell_date"] >= ws]
+        elif key == "ytd":
+            ws, we = dt.datetime(now.year, 1, 1), now
+            legs = [l for l in closed if l["sell_date"] >= ws]
+        else:  # all — window start = min(first buy, first sell), end = now
+            legs = list(closed)
+            if legs:
+                first_sell = min(l["sell_date"] for l in legs)
+                first_buys = [l["buy_date"] for l in legs if l.get("buy_date")]
+                first_buy = min(first_buys) if first_buys else first_sell
+                ws, we = min(first_buy, first_sell), now
+            else:
+                ws, we = None, None
+        windows[key] = _journal_window(tj, legs, ws, we, allocation,
+                                       counts, src_csv)
+
+    return {"generated": now.isoformat(timespec="seconds"),
+            "allocation": allocation,
+            "windows": windows,
+            "counts": counts,
+            "sourceCsv": src_csv}
+
+
+def build_journal_locked(args):
+    """Full journal pipeline -> encrypted SWING_JOURNAL_LOCKED blob dict, or
+    None (with a WARN) on any degrade path. NEVER emits plaintext."""
+    if args.no_journal:
+        print("journal section skipped (--no-journal)", flush=True)
+        return None
+
+    password = resolve_journal_password(args)
+    if not password:
+        warn("journal password not configured — Trade Journal section omitted. "
+             "Create ~/.journal_dashboard_key (chmod 600) or pass "
+             "--journal-password / --journal-password-file / "
+             "JOURNAL_DASH_PASSWORD (see README).")
+        return None
+
+    try:
+        tj = import_trade_journal()
+    except Exception as e:
+        warn(f"journal section unavailable: trade_journal.py not importable "
+             f"({e}) — expected next to this script, in ~/Downloads, or "
+             f"~/trading-src/journal")
+        return None
+
+    if args.journal_config:
+        tj.CONFIG_PATH = args.journal_config  # test override
+
+    csv_path = args.journal_csv
+    if not csv_path:
+        try:
+            csv_path = tj.load_config().get("last_csv_path")
+        except Exception as e:
+            warn(f"journal config unreadable: {e} — journal section omitted")
+            return None
+    if not csv_path or not os.path.isfile(csv_path):
+        warn(f"journal CSV not found ({csv_path or 'no last_csv_path in config'})"
+             f" — journal section omitted (pass --journal-csv or load a CSV in "
+             f"the journal app once)")
+        return None
+
+    try:
+        closed, opens, orphans = tj.parse_fidelity_csv(csv_path)
+    except Exception as e:
+        warn(f"journal CSV parse failed for {csv_path}: {e} — journal section "
+             f"omitted")
+        return None
+
+    tags = load_journal_tags(args.journal_tags_db or tj.DB_PATH)
+    apply_journal_tags(tj, closed + opens + orphans, tags)
+
+    try:
+        journal = build_journal_payload(tj, closed, opens, orphans, csv_path)
+    except Exception as e:
+        warn(f"journal computation failed: {e} — journal section omitted")
+        return None
+
+    plaintext = json.dumps(journal, separators=(",", ":"),
+                           ensure_ascii=False).encode("utf-8")
+    return encrypt_journal(plaintext, password)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Self-test — pure mapping functions only, ZERO file/network access
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -663,8 +1110,45 @@ def selftest():
     assert rev_text({"rev_confirmed": False}) == "❌ not confirmed"
     assert rev_text({}) == "—"
 
+    # ── Journal crypto: cross-language TEST VECTOR (CONTRACT-JOURNAL.md §1) ──
+    vec_salt = bytes(range(0x00, 0x10))
+    vec_nonce = bytes(range(0x10, 0x20))
+    vec_pt = b'{"hello":"journal","n":42}'
+    blob = encrypt_journal(vec_pt, "test-password-123",
+                           salt=vec_salt, nonce=vec_nonce, iters=60000)
+    assert blob["salt"] == "AAECAwQFBgcICQoLDA0ODw==", blob["salt"]
+    assert blob["nonce"] == "EBESExQVFhcYGRobHB0eHw==", blob["nonce"]
+    assert blob["ct"] == "8b1TGRkQdqIcsvBz3ROoD9QduZQji8LmU1Q=", blob["ct"]
+    assert blob["mac"] == "4k9ErqDSS9amw8ch9P1EnmanvpePwwxk9AeoEQOHxgM=", blob["mac"]
+    assert blob["v"] == 1 and blob["kdf"] == "pbkdf2-sha256" and blob["iter"] == 60000
+    assert decrypt_journal(blob, "test-password-123") == vec_pt
+
+    # random round-trip (multi-block keystream: > 32 bytes)
+    rnd_pt = os.urandom(517)
+    rnd_blob = encrypt_journal(rnd_pt, "hunter2-λ-ünïcode")
+    assert decrypt_journal(rnd_blob, "hunter2-λ-ünïcode") == rnd_pt
+    assert rnd_blob["ct"] != base64.b64encode(rnd_pt).decode("ascii")
+
+    # wrong password -> MAC rejection BEFORE any decryption
+    try:
+        decrypt_journal(rnd_blob, "hunter2-wrong")
+        raise AssertionError("wrong password was NOT rejected")
+    except ValueError:
+        pass
+    # tampered ciphertext -> MAC rejection too
+    bad = dict(rnd_blob)
+    ct_bytes = bytearray(base64.b64decode(bad["ct"]))
+    ct_bytes[0] ^= 0x01
+    bad["ct"] = base64.b64encode(bytes(ct_bytes)).decode("ascii")
+    try:
+        decrypt_journal(bad, "hunter2-λ-ünïcode")
+        raise AssertionError("tampered ciphertext was NOT rejected")
+    except ValueError:
+        pass
+
     print("selftest OK — signal cleanup, statusKind, ACT NOW derivations, "
-          "watchlist split, rev mapping all pass")
+          "watchlist split, rev mapping, journal crypto (test vector + "
+          "random round-trip + wrong-password rejection) all pass")
     return 0
 
 
@@ -685,6 +1169,20 @@ def main(argv=None):
     ap.add_argument("--date", default=None, metavar="YYYY-MM-DD",
                     help="override journal date (default: swing timestamp's date, else today)")
     ap.add_argument("--selftest", action="store_true", help="run pure-function assertions and exit")
+    # Trade Journal (locked) section — CONTRACT-JOURNAL.md
+    ap.add_argument("--journal-csv", default=None,
+                    help="Fidelity trade-history CSV (default: trade_journal "
+                         "config's last_csv_path)")
+    ap.add_argument("--journal-tags-db", default=None,
+                    help="override tags SQLite path (default: trade_journal.DB_PATH)")
+    ap.add_argument("--journal-config", default=None,
+                    help="override trade_journal config JSON path (tests)")
+    ap.add_argument("--journal-password", default=None,
+                    help="journal encryption password (prefer the key file)")
+    ap.add_argument("--journal-password-file", default=None,
+                    help="file containing the journal password")
+    ap.add_argument("--no-journal", action="store_true",
+                    help="skip the encrypted Trade Journal section")
     args = ap.parse_args(argv)
 
     if args.selftest:
@@ -776,11 +1274,21 @@ def main(argv=None):
         except Exception as e:
             warn(f"could not write history {args.history}: {e}")
 
+    # ── Trade Journal (locked) section — encrypted blob, recomputed fresh
+    #    each run, emitted top-level only (never into per-date payloads or
+    #    journal_history.json). None => section omitted (WARN already printed).
+    journal_locked = build_journal_locked(args)
+
     # ── Emit journal_data.js ──
     payload = json.dumps(journals, indent=1, ensure_ascii=False)
+    out_text = "window.SWING_JOURNALS = " + payload + ";\n"
+    if journal_locked is not None:
+        out_text += ("window.SWING_JOURNAL_LOCKED = "
+                     + json.dumps(journal_locked, separators=(",", ":"))
+                     + ";\n")
     try:
         with open(args.out, "w", encoding="utf-8") as f:
-            f.write("window.SWING_JOURNALS = " + payload + ";\n")
+            f.write(out_text)
     except Exception as e:
         print(f"ERROR: could not write output {args.out}: {e}", flush=True)
         return 1
@@ -799,6 +1307,14 @@ def main(argv=None):
     print(f"Heatmap      : {len(heatmap)} tiles ({n_act} active / {n_exc} excluded)")
     print(f"LEAPs        : original {len(leaps['original'])} (top {leaps['origTopScore']}/{leaps['max']}) "
           f"· exceeders {len(leaps['exceeders'])}")
+    if args.no_journal:
+        journal_line = "skipped (--no-journal)"
+    elif journal_locked is not None:
+        journal_line = (f"encrypted blob emitted ({len(journal_locked['ct'])} "
+                        f"b64 chars, PBKDF2 {journal_locked['iter']} iters)")
+    else:
+        journal_line = "omitted (see WARN above)"
+    print(f"Journal      : {journal_line}")
     print(f"Dates in file: {len(journals)}"
           + ("" if args.no_history else f" (history keeps {HISTORY_KEEP})"))
     print(f"Output       : {args.out}")
