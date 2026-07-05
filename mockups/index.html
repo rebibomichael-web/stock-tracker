@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journal Dashboard — Mockup Variations</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f5f5f2; color: #1c1c1a; padding: 32px 20px 60px; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 6px; }
+  .sub { color: #6b6a64; font-size: 14px; margin-bottom: 26px; }
+  .badge { display: inline-block; background: #fff3cd; color: #7a5c00; border: 1px solid #e6d28a; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; vertical-align: middle; margin-left: 8px; }
+  .card { background: #fff; border: 1px solid #e2e1da; border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; display: flex; gap: 16px; align-items: flex-start; }
+  .num { font-size: 22px; font-weight: 800; color: #9a9990; min-width: 44px; line-height: 1.2; }
+  .card h2 { font-size: 17px; margin-bottom: 4px; }
+  .card h2 a { color: #1c56b0; text-decoration: none; }
+  .card h2 a:hover { text-decoration: underline; }
+  .card p { font-size: 13.5px; color: #55544e; line-height: 1.5; }
+  .tags { margin-top: 8px; }
+  .tag { display: inline-block; font-size: 11px; background: #f0efe9; color: #55544e; border-radius: 999px; padding: 2px 10px; margin: 0 6px 4px 0; }
+  .common { background: #fff; border: 1px solid #e2e1da; border-radius: 10px; padding: 18px 20px; margin: 26px 0 0; font-size: 13.5px; color: #55544e; line-height: 1.65; }
+  .common b { color: #1c1c1a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📓 Journal Dashboard — Variations <span class="badge">MOCKUPS · SAMPLE DATA</span></h1>
+  <div class="sub">Five design directions, identical sample data (3 journal dates). Pick one — or mix sections from several. Target: integrates over <code>swing_flags.html</code>.</div>
+
+  <div class="card"><div class="num">V1</div><div>
+    <h2><a href="journal_v1_terminal_dark.html">Terminal Dark</a></h2>
+    <p>Matches your current Stock Tracker app (dark navy, blue table headers) so the journal feels like a new tab of the same tool. Dense, table-first. Click a heatmap tile → monospace detail box.</p>
+    <div class="tags"><span class="tag">dark</span><span class="tag">matches existing app</span><span class="tag">dense tables</span></div>
+  </div></div>
+
+  <div class="card"><div class="num">V2</div><div>
+    <h2><a href="journal_v2_finviz_light.html">Finviz Light</a></h2>
+    <p>Matches your Market Pulse / watchlist look: white page, steel-blue headers, classic green/red tiles with <b>tile size = LEAP score</b>, index sparklines, flame-banner ACT NOW cards like your screenshot.</p>
+    <div class="tags"><span class="tag">light</span><span class="tag">finviz style</span><span class="tag">tile size = LEAP score</span><span class="tag">sparklines</span></div>
+  </div></div>
+
+  <div class="card"><div class="num">V3</div><div>
+    <h2><a href="journal_v3_command_center.html">Command Center</a></h2>
+    <p>Modern dark trading desk: 7-day date chip strip, KPI stat row (ACT NOW count, flagged positions, top LEAP, VIX), big amber ACT NOW hero cards first, heatmap + ranked LEAPs side by side.</p>
+    <div class="tags"><span class="tag">dark</span><span class="tag">card-based</span><span class="tag">KPI row</span><span class="tag">action-first</span></div>
+  </div></div>
+
+  <div class="card"><div class="num">V4</div><div>
+    <h2><a href="journal_v4_journal_book.html">Journal Book</a></h2>
+    <p>Journal-first: sidebar lists dates as diary entries with mini-summaries; calm editorial light theme with numbered sections and <b>day-over-day deltas</b> (VIX change, top LEAP score vs prior day).</p>
+    <div class="tags"><span class="tag">light</span><span class="tag">diary sidebar</span><span class="tag">day-over-day deltas</span><span class="tag">calm review</span></div>
+  </div></div>
+
+  <div class="card"><div class="num">V5</div><div>
+    <h2><a href="journal_v5_mobile_compact.html">Mobile Compact</a></h2>
+    <p>Phone-first single column with big date chips and collapsible sections with live counts ("🔥 Act Now (4)"). Everything thumb-usable at 400px; tables scroll inside their cards.</p>
+    <div class="tags"><span class="tag">dark</span><span class="tag">phone-first</span><span class="tag">collapsible sections</span></div>
+  </div></div>
+
+  <div class="common">
+    <b>Every variation includes:</b> date selection across 3 sample journal dates · market context + index strip ·
+    heatmap of all journal stocks with a distinct <b>Excluded</b> category (with reasons) and crypto row ·
+    Top 3 LEAPs from the original scan · all full-scan LEAPs beating that day's original top score
+    (price, % change, premium, LEAP score /15, signal, Rev) · 🔥 ACT NOW cards for every swing flag ≥ 85
+    (entry, max chase, stop, T1/T2 + R/R, hold, hard stop, score) · Open Position Alerts (status, entry→current,
+    days held, momentum /4, the 4 checks) · full table of all flags &gt; 75. Static sample data only — no backend wiring yet.
+  </div>
+</div>
+</body>
+</html>
