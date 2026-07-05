@@ -345,15 +345,16 @@
 
     /* heatmap: 3-across grid */
     .hm-grouplabel { margin: 12px 2px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #8b93a3; }
-    .hm-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .hm-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
     .tile {
+      min-width: 0;
       border-radius: 9px; padding: 8px 8px 7px; min-height: 56px; cursor: pointer;
       display: flex; flex-direction: column; justify-content: center; gap: 1px;
       border: 1px solid rgba(255,255,255,.06);
       background: var(--bgd); color: #fff;
       -webkit-tap-highlight-color: transparent;
     }
-    .tile .trow { display: flex; align-items: center; gap: 4px; }
+    .tile .trow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
     .tile .tk { font-size: 13px; font-weight: 800; letter-spacing: .3px; color: #fff; }
     .tile .leapb {
       margin-left: auto; font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -991,7 +992,7 @@ function loadJournals() {
   const JOURNALS = loadJournals();
   const DATES = Object.keys(JOURNALS).sort();                 // ascending
   const HAS_LIVE = typeof window !== "undefined" && !!window.SWING_JOURNALS;
-  let selected = JOURNALS[DEFAULT_DATE] ? DEFAULT_DATE : DATES[DATES.length - 1];
+  let selected = (!HAS_LIVE && JOURNALS[DEFAULT_DATE]) ? DEFAULT_DATE : DATES[DATES.length - 1];  // live => newest date
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"']/g, c =>

@@ -340,7 +340,7 @@
 
     /* heatmap: 3-across grid */
     .hm-grouplabel { margin: 12px 2px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #8b93a3; }
-    .hm-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .hm-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
     .tile {
       border-radius: 9px; padding: 8px 8px 7px; min-height: 56px; cursor: pointer;
       display: flex; flex-direction: column; justify-content: center; gap: 1px;
