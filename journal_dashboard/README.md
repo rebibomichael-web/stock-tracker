@@ -110,9 +110,12 @@ correct, not a bug.
   offline rebuild use `--offline --quotes quotes.json` with a fixture in the
   documented format.
 - **"classify source: embedded fallback"** — `swing_flag.py` wasn't importable
-  from the script's folder. Flags still work (the fallback is a copy of the
-  same rules), but keep the two in sync: if you tune thresholds in
-  `swing_flag.py`, update the fallback block in `build_journal_data.py`.
+  from the script's folder. On Michael's machine it lives in
+  `~/trading-src/journal/swing_flag.py`, not `~/Desktop/swing_project/` — copy
+  it in (`cp ~/trading-src/journal/swing_flag.py ~/Desktop/swing_project/`) and
+  re-run; the summary should then print "classify source: swing_flag.py".
+  Flags still work on the fallback (it's a copy of the same rules), but only
+  the import path follows future threshold tuning automatically.
 - **Dashboard still shows the yellow SAMPLE badge** — `journal_data.js`
   isn't next to `journal_dashboard.html`, or the build failed before writing
   it. Check the one-screen summary the adapter prints: the `Output` line tells
