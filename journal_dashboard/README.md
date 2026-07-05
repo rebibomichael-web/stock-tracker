@@ -82,10 +82,12 @@ with `--quotes fixture.json` (no network — for testing), and `--selftest`
 
 The LEAP scanner already computes reversal confirmation (`rev_confirmed`) per
 ticker but doesn't persist it into the recommendations JSON, so the
-dashboard's **Rev column shows "—" until you add it**. In
-`leap_headless_scan.py`, right next to the existing `premium_stale` attach
-(inside `main()`, after `tracker.recs[-1]["premium_stale"] = row["premium_stale"]`
-and before `tracker._save()`), add this one line:
+dashboard's **Rev column shows "—" until you add it**. Patch the copy your
+cron actually runs — `~/leap_headless_scan.py` (NOT a copy inside
+swing_project; the trading-src mirror picks the change up via your one-way
+sync). Right next to the existing `premium_stale` attach (inside `main()`,
+after `tracker.recs[-1]["premium_stale"] = row["premium_stale"]` and before
+`tracker._save()`), add this one line:
 
 ```python
                     tracker.recs[-1]["rev_confirmed"] = row["rev_confirmed"]
