@@ -76,7 +76,97 @@ Every path also has a CLI flag (`--swing --csv --leap --out --history`), plus
 `--date YYYY-MM-DD` (override the journal date; default is the swing scan
 timestamp's date), `--no-history` (write a single date only), `--offline`
 with `--quotes fixture.json` (no network — for testing), and `--selftest`
-(runs the built-in assertions on the mapping math, touches nothing).
+(runs the built-in assertions on the mapping math and the journal encryption
+scheme — test vector, round-trip, wrong-password rejection — touches nothing).
+
+## Trade Journal (locked) section
+
+The dashboard has a password-protected "💰 Trade Journal" section: your real
+closed-trade P/L, win rates, per-strategy cards, charts and a recent-trades
+table, computed from the same Fidelity CSV + tags DB your desktop
+`trade_journal.py` app uses. Because `journal_data.js` may sit in synced
+folders and is served over plain HTTP on the LAN, this data is **encrypted at
+rest** and only decrypted in the browser after you type the password.
+
+### Password setup (one time)
+
+```bash
+# pick any passphrase; this file is the default password source
+printf 'my-strong-passphrase' > ~/.journal_dashboard_key
+chmod 600 ~/.journal_dashboard_key
+```
+
+The adapter warns if the file's permissions aren't `600`. Alternative sources,
+first match wins: `--journal-password <str>` →
+`--journal-password-file <path>` → env `JOURNAL_DASH_PASSWORD` →
+`~/.journal_dashboard_key`. Then just re-run `build_journal_data.py` — on the
+page, the section shows a 🔒 password prompt; unlocking takes a couple of
+seconds (60,000 PBKDF2 iterations, on purpose). "Remember this device" stores
+only the *derived* keys in that browser, never the password.
+
+If you change the password later, just edit the key file and re-run the
+build; browsers that "remembered" the old password will simply prompt again.
+
+### What is / isn't encrypted
+
+| Encrypted (inside `SWING_JOURNAL_LOCKED`) | Plaintext (as before) |
+|---|---|
+| All journal trade data: tickers, option symbols, P/L dollars/percents, win rates, deployed capital, turnover, allocation, trade dates, the recent-trades table, CSV filename | The existing per-date dashboard sections (market strip, ACT NOW, over-75 table, positions, heatmap, LEAPs) in `window.SWING_JOURNALS` |
+
+Scheme: PBKDF2-HMAC-SHA256 (60k iterations) → HMAC-SHA256 keystream XOR +
+encrypt-then-MAC; the MAC is verified before decryption, so a wrong password
+reveals nothing (and is how "wrong password" is detected). The blob is
+recomputed fresh each run, lives only at the top level of `journal_data.js`,
+and is **never** written to `journal_history.json`. If no password source is
+configured the adapter prints a WARN and omits the section entirely — journal
+data is never emitted unencrypted.
+
+### Journal flags
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--journal-csv` | `last_csv_path` from `~/.trade_journal_config.json` | Fidelity trade-history CSV to analyze |
+| `--journal-tags-db` | `~/.trade_journal_tags.db` | Strategy tags SQLite (same one the app writes) |
+| `--journal-config` | `~/.trade_journal_config.json` | Config override (mostly for tests) |
+| `--journal-password` | — | Password on the command line (prefer the key file — argv is visible in `ps`) |
+| `--journal-password-file` | — | Read password from this file |
+| `--no-journal` | off | Skip the journal section entirely |
+
+The adapter imports your real `trade_journal.py` (looked up next to the
+script, then `~/Downloads`, then `~/trading-src/journal`) and reuses its
+parser, FIFO matcher, tagging rules and return math — nothing is
+reimplemented. It imports headlessly: on machines without Tk/matplotlib the
+GUI imports are stubbed out automatically.
+
+### Cron
+
+**No change needed.** The existing cron line picks the journal section up
+automatically on its next run: the password comes from
+`~/.journal_dashboard_key`, the CSV path from the journal app's own config
+(whatever you last loaded in the app), and every journal problem degrades to
+a WARN line in `~/journal_build.log` while the rest of the dashboard still
+builds.
+
+### Journal troubleshooting
+
+- **Section shows "Trade Journal not configured"** — no password source was
+  available at build time. Create `~/.journal_dashboard_key` (see setup
+  above) and re-run the build; the log will have said
+  `WARN: journal password not configured …`.
+- **"Wrong password" when unlocking** — the password you typed doesn't match
+  the one used at build time (MAC verification failed — by design nothing
+  decrypts). Check the content of `~/.journal_dashboard_key` (note: the file
+  is read *trimmed*, so a trailing newline is fine).
+- **`WARN: journal section unavailable: trade_journal.py not importable`** —
+  the adapter couldn't find/import your journal app. Keep `trade_journal.py`
+  in `~/Downloads` (its canonical home) or copy it next to
+  `build_journal_data.py`; the mirror in `~/trading-src/journal` also works.
+- **`WARN: journal CSV not found`** — pass `--journal-csv` or open the CSV in
+  the journal app once (it records `last_csv_path` in its config).
+- **Permissions warning about the key file** — run
+  `chmod 600 ~/.journal_dashboard_key`.
+- **Sanity check** — `python3 build_journal_data.py --selftest` verifies the
+  encryption test vector, a random round-trip, and wrong-password rejection.
 
 ## PATCH NOTE — turn the Rev column live (1 line)
 
