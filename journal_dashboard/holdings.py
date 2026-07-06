@@ -1057,6 +1057,9 @@ def main(argv=None):
                          "(default: the journal app's last CSV's folder)")
     ap.add_argument("--symbol", default=None, help="only this symbol")
     ap.add_argument("--json", action="store_true", help="emit JSON")
+    ap.add_argument("--simple", action="store_true",
+                    help="one line per stock: ticker, shares, avg cost basis "
+                         "— no per-account breakdown, no options, no warnings")
     ap.add_argument("--include-cash", action="store_true",
                     help="include money-market/core positions (SPAXX, ...)")
     ap.add_argument("--selftest", action="store_true")
@@ -1092,6 +1095,13 @@ def main(argv=None):
                         if (m := OPTION_SYMBOL_RE.match(o["t"])) and m.group(1) == want]
     if args.json:
         print(json.dumps(h, indent=1))
+        return 0
+
+    if args.simple:
+        # ticker, shares, avg cost basis — one line each, nothing else
+        for s in h["stocks"]:
+            bps = f"${s['bps']:,.2f}" if s["bps"] is not None else "—"
+            print(f"{s['t']:<8} {_fmt_shares(s['shares']):>10} sh   {bps}/sh")
         return 0
 
     snap = (f", positions snapshot {h['snapshotAsOf'] or 'undated'} "
