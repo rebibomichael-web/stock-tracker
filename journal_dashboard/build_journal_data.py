@@ -91,7 +91,7 @@ try:
     import swing_flag as _swing_flag
     classify = _swing_flag.classify
     _FLAG_ORDER = getattr(_swing_flag, "_FLAG_ORDER",
-                          {"SUSPECT": -1, "WATCH": 0, "ROT": 0,
+                          {"STOP": -2, "SUSPECT": -1, "WATCH": 0, "ROT": 0, "EARN": 0,
                            "WATCH?": 1, "ROT~": 1, "HOLD": 2})
     _CLASSIFY_SOURCE = "swing_flag.py"
 except ImportError:
@@ -105,7 +105,8 @@ except ImportError:
     WATCH_SOFT_PCT       = -5.0
     ROT_DAYS             = 22
     SUSPECT_GAIN_PCT     = 100.0
-    _FLAG_ORDER = {"SUSPECT": -1, "WATCH": 0, "ROT": 0,
+    HARD_STOP_PCT        = -15.0
+    _FLAG_ORDER = {"STOP": -2, "SUSPECT": -1, "WATCH": 0, "ROT": 0, "EARN": 0,
                    "WATCH?": 1, "ROT~": 1, "HOLD": 2}
 
     def classify(current_gain_pct, underwater_pct, days_held):
@@ -117,6 +118,10 @@ except ImportError:
                 f"implausibly large -- almost certainly bad price or stale entry. "
                 f"Verify; do NOT act on it.")
         flags, reasons = [], []
+        if current_gain_pct <= HARD_STOP_PCT:
+            flags.append("STOP")
+            reasons.append(f"down {current_gain_pct:.1f}% (floor {HARD_STOP_PCT:.0f}%) -- "
+                           f"catastrophic stop: EXIT, post-mortem after")
         if underwater_pct <= WATCH_UNDERWATER_PCT:
             flags.append("WATCH")
             reasons.append(f"hit {underwater_pct:.1f}% at worst (past -8% cliff), "
