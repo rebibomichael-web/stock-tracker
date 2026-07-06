@@ -637,9 +637,20 @@ def discover_positions(directory):
     return sorted(glob.glob(os.path.join(directory, "Portfolio_Positions*.csv")))
 
 
-def _snapshot_asof(path):
-    """As-of date from Fidelity's filename (…_Jul-06-2026.csv), else mtime."""
-    m = re.search(r"([A-Za-z]{3})-(\d{2})-(\d{4})", os.path.basename(path))
+def _snapshot_asof(path, raw_rows=None):
+    """As-of date: the file's own 'Date downloaded Jul-06-2026 …' footer wins,
+    then the filename (…_Jul-06-2026.csv or …_Jul062026.csv), then mtime."""
+    for row in (raw_rows or []):
+        for c in row:
+            m = re.search(r"Date downloaded\s+([A-Za-z]{3})-?(\d{2})-?(\d{4})",
+                          str(c))
+            if m:
+                try:
+                    return dt.datetime.strptime("-".join(m.groups()),
+                                                "%b-%d-%Y").date()
+                except ValueError:
+                    pass
+    m = re.search(r"([A-Za-z]{3})-?(\d{2})-?(\d{4})", os.path.basename(path))
     if m:
         try:
             return dt.datetime.strptime("-".join(m.groups()), "%b-%d-%Y").date()
@@ -736,7 +747,7 @@ def parse_positions_file(path):
             "basis": basis,
             "is_option": is_opt,
         })
-    return _snapshot_asof(path), rows
+    return _snapshot_asof(path, raw), rows
 
 
 def load_newest_snapshot(paths, notes):
@@ -943,23 +954,30 @@ def selftest():
     #     snapshot wins over history, mismatch quantified, engine-only kept.
     import tempfile as _tf
     with _tf.TemporaryDirectory() as td:
-        pp = os.path.join(td, "Portfolio_Positions_Jul-06-2026.csv")
+        # dashless filename (real download) + trailing commas on data rows
+        # (the dialect the desktop app refuses) + 'Date downloaded' footer
+        # (wins over filename) + a CUSIP-only row with no basis at all.
+        pp = os.path.join(td, "Portfolio_Positions_Jul052026.csv")
         with open(pp, "w", encoding="utf-8") as f:
             f.write(
                 "Account Number,Account Name,Symbol,Description,Quantity,"
                 "Last Price,Current Value,Cost Basis Total,Average Cost Basis,Type\n"
                 'X17212229,Joint WROS - TOD,TSLA,TESLA INC COM,80,$400.00,'
-                '"$32,000.00","$28,000.00",$350.00,Margin\n'
+                '"$32,000.00","$28,000.00",$350.00,Margin,\n'
                 "235498151,ROTH IRA,TSLA,TESLA INC COM,23,$400.00,"
-                '"$9,200.00","$8,100.00",$352.17,Cash\n'
+                '"$9,200.00","$8,100.00",$352.17,Cash,\n'
                 "X83768586,Joint WROS - TOD,SPAXX**,FIDELITY GOVT MONEY MARKET,"
-                "512.05,$1.00,$512.05,--,--,Cash\n"
+                "512.05,$1.00,$512.05,--,--,Cash,\n"
+                "X17212229,Joint WROS - TOD,704916204,PEAKSOFT MULTINET CORP,"
+                "138,--,--,--,--,Cash,\n"
                 "Pending Activity,,,,,,$99.00,,,\n"
-                ',,,"The data and information in this spreadsheet",,,,,,\n')
+                ',,,"The data and information in this spreadsheet",,,,,,\n'
+                '"Date downloaded Jul-06-2026 3:49 a.m ET"\n')
         asof, rows = parse_positions_file(pp)
-        assert asof == dt.date(2026, 7, 6) and len(rows) == 3, (asof, rows)
+        assert asof == dt.date(2026, 7, 6) and len(rows) == 4, (asof, rows)
         assert rows[0]["qty"] == 80 and rows[0]["basis"] == 28000.00
         assert rows[2]["symbol"] == "SPAXX" and rows[2]["basis"] is None
+        assert rows[3]["symbol"] == "704916204" and rows[3]["basis"] is None
 
         snap = {"asof": "2026-07-06", "file": os.path.basename(pp), "rows": rows}
         txns = [_tx("2026-03-01", "BUY", "TSLA", "X17212229", 20, 400, -8000.00)]
@@ -1084,14 +1102,18 @@ def main(argv=None):
     print("=" * 78)
     if not h["stocks"]:
         print("(no open stock positions in the data window)")
+    def _money(v, width=12):
+        return f"${v:>{width},.2f}" if v is not None else f"{'—':>{width + 1}}"
+
     for s in h["stocks"]:
         bps = f"${s['bps']:,.2f}" if s["bps"] is not None else "—"
         flag = "  ⚠" if s.get("flags") else ""
-        print(f"{s['t']:<8} {_fmt_shares(s['shares']):>12} sh   "
-              f"adj basis ${s['basis']:>12,.2f}   {bps}/sh{flag}")
+        print(f"{s['t']:<10} {_fmt_shares(s['shares']):>12} sh   "
+              f"adj basis {_money(s['basis'])}   {bps}/sh{flag}")
         for a in s["accounts"]:
-            print(f"    {a['a']:<18} {_fmt_shares(a['shares']):>12} sh   "
-                  f"${a['basis']:>12,.2f}   ${a['bps']:,.2f}/sh")
+            abps = f"${a['bps']:,.2f}/sh" if a["bps"] is not None else "—"
+            print(f"    {a['a']:<20} {_fmt_shares(a['shares']):>12} sh   "
+                  f"{_money(a['basis'])}   {abps}")
         for fl in s.get("flags", []):
             print(f"    ⚠ {fl}")
     if h["options"]:
@@ -1099,7 +1121,7 @@ def main(argv=None):
         print("Options (contracts, tracked separately):")
         for o in h["options"]:
             print(f"{o['t']:<18} {o['contracts']:>6.0f} ct   "
-                  f"basis ${o['basis']:>10,.2f}   {o.get('label', '')}")
+                  f"basis {_money(o['basis'], 10)}   {o.get('label', '')}")
             for fl in o.get("flags", []):
                 print(f"    ⚠ {fl}")
     for w in h["warnings"]:
