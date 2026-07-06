@@ -1053,10 +1053,16 @@ def build_journal_locked(args):
                          f"to the journal CSV {csv_path}")
                 paths = [csv_path]
                 hdir = os.path.dirname(os.path.abspath(csv_path))
-            journal["holdings"] = _holdings.build_from_paths(paths)
-            print(f"holdings: {len(journal['holdings']['stocks'])} stocks / "
-                  f"{len(journal['holdings']['options'])} option lines from "
-                  f"{len(paths)} CSV file(s) in {hdir}", flush=True)
+            ppaths = _holdings.discover_positions(hdir)
+            journal["holdings"] = _holdings.build_from_paths(
+                paths, positions_paths=ppaths)
+            hd = journal["holdings"]
+            snap = (f" + positions snapshot {hd['snapshotAsOf'] or 'undated'}"
+                    if hd.get("snapshotFile") else " (no positions snapshot — "
+                    "counts limited to the history window)")
+            print(f"holdings: {len(hd['stocks'])} stocks / "
+                  f"{len(hd['options'])} option lines from {len(paths)} "
+                  f"history CSV(s) in {hdir}{snap}", flush=True)
         except Exception as e:
             warn(f"holdings section unavailable: {e} — omitted")
 

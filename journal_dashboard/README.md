@@ -146,6 +146,18 @@ It's computed by `holdings.py` (same folder), which:
   instead of a made-up basis. Wash-sale adjustments and splits are not
   applied (yet).
 
+**⚠ Important — history alone under-counts.** Trade-history exports only
+contain *transactions*. Shares you bought before the earliest export row and
+never touched since leave no trace, so a history-only build can't see them
+(and says so in a warning). For true totals, also download a **positions
+export** from Fidelity — Accounts &amp; Trade → Portfolio → Positions →
+Download — into the same folder. The file (`Portfolio_Positions_….csv`) is
+picked up automatically, becomes the authoritative count **and** carries
+Fidelity's own adjusted cost basis (including your pre-window lots); the
+transaction history then reconciles against it, e.g. "transaction history
+covers 20.6 of 103 — the rest predates the exports". Newest snapshot wins;
+a column-shifted export is refused with a warning, never guessed at.
+
 Standalone use (no dashboard needed):
 
 ```bash

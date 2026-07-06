@@ -2182,9 +2182,11 @@ function loadJournals() {
     var wtail = (hd.warnings && hd.warnings.length)
       ? " · ⚠ " + esc(hd.warnings.join(" · ")) : "";
     h += '<div class="jr-foot">holdings from ' + (hd.files != null ? hd.files : "—") +
-      " export file(s) · " + (hd.rowsUnique != null ? hd.rowsUnique : "—") +
+      " history file(s) · " + (hd.rowsUnique != null ? hd.rowsUnique : "—") +
       " unique rows · window " + esc(hd.windowStart || "—") + " → " +
-      esc(hd.windowEnd || "—") + wtail + "</div>";
+      esc(hd.windowEnd || "—") +
+      (hd.snapshotFile ? " · positions snapshot " + esc(hd.snapshotAsOf || "undated")
+                       : " · no positions snapshot") + wtail + "</div>";
     return h;
   }
 

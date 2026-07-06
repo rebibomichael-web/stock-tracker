@@ -24,6 +24,13 @@ Multiple overlapping exports are unioned with max-multiplicity dedup: a row's
 count = the MAX number of times it appears in any single file, so re-exported
 duplicates collapse while two genuinely identical same-day fills survive.
 
+A Fidelity POSITIONS export (Portfolio_Positions*.csv) in the same folder is
+picked up automatically and becomes the authoritative current count + basis
+(Fidelity's own adjusted basis, which includes lots older than the history
+window); the transaction history then reconciles against it and quantifies
+what it can't explain. Without a snapshot, history-only counts MISS anything
+bought before the earliest export row and untouched since — a warning says so.
+
 Limitations (reported as flags/warnings, never silently):
   • Shares bought before the earliest export row are invisible; if sells or
     transfers exceed known lots the symbol is flagged and the remainder is
@@ -418,7 +425,84 @@ def _r(v, dp):
     return round(v + 0.0, dp)
 
 
-def compute_holdings(txns, n_unique, n_files, include_cash=False):
+def _merge_snapshot(stocks, options, snapshot, include_cash):
+    """Positions snapshot = authoritative current qty + Fidelity's own
+    (adjusted) cost basis; the history engine's rows become reconciliation.
+    Returns (stocks, options) rebuilt from the snapshot, plus engine-only
+    rows (positions the snapshot doesn't show) flagged as such."""
+    eng = {r["t"]: r for r in stocks + options}
+    by_sym = defaultdict(list)
+    for r in snapshot["rows"]:
+        by_sym[r["symbol"]].append(r)
+
+    out_stocks, out_options = [], []
+    for sym in sorted(by_sym):
+        srows = by_sym[sym]
+        is_opt = srows[0]["is_option"] or bool(OPTION_SYMBOL_RE.match(sym))
+        if not is_opt and not include_cash and sym in MONEY_MARKET:
+            continue
+        snap_qty = sum(r["qty"] for r in srows)
+        known = [r for r in srows if r["basis"] is not None]
+        snap_basis = sum(r["basis"] for r in known)
+        e = eng.pop(sym, None)
+        hist_net = (e or {}).get("shares", (e or {}).get("contracts", 0.0)) or 0.0
+        sym_flags = []
+        if abs(hist_net - snap_qty) > 1e-4:
+            sym_flags.append(
+                f"transaction history covers {_r(hist_net, 4)} of "
+                f"{_r(snap_qty, 4)} — the rest predates the exports; count and "
+                f"basis are Fidelity's own snapshot ({snapshot['asof'] or 'undated'})")
+        if len(known) < len(srows):
+            if e and abs(hist_net - snap_qty) <= 1e-4 and e.get("basis"):
+                snap_basis = e["basis"]
+                known = srows
+                sym_flags.append("snapshot lacked cost basis — basis computed "
+                                 "from transaction history")
+            else:
+                sym_flags.append("cost basis missing for part of this position "
+                                 "in the snapshot")
+        accts = []
+        for r in sorted(srows, key=lambda r: r["acct"]):
+            accts.append({
+                "a": _acct_label(r["acct"], r["acct_name"]),
+                "shares": _r(r["qty"], 4),
+                "basis": _r(r["basis"], 2) if r["basis"] is not None else None,
+                "bps": _r(r["basis"] / r["qty"], 2)
+                       if (r["basis"] is not None and abs(r["qty"]) > QTY_EPS) else None,
+            })
+        row = {
+            "t": sym,
+            "shares": _r(snap_qty, 4),
+            "basis": _r(snap_basis, 2) if known else None,
+            "bps": _r(snap_basis / snap_qty, 2)
+                   if (known and abs(snap_qty) > QTY_EPS) else None,
+            "accounts": accts,
+        }
+        if sym_flags:
+            row["flags"] = sym_flags
+        if is_opt:
+            row["label"] = (srows[0]["desc"] or "")[:44]
+            row["contracts"] = row.pop("shares")
+            out_options.append(row)
+        else:
+            out_stocks.append(row)
+
+    # engine-only leftovers: positions history shows but the snapshot doesn't
+    for sym, e in sorted(eng.items()):
+        qty = e.get("shares", e.get("contracts"))
+        if qty is None or abs(qty) < QTY_EPS:
+            continue
+        e.setdefault("flags", []).append(
+            f"not in the positions snapshot ({snapshot['asof'] or 'undated'}) "
+            f"— opened after it, or closed since the history window")
+        (out_options if "contracts" in e else out_stocks).append(e)
+
+    out_stocks.sort(key=lambda s: -(s["basis"] or 0))
+    out_options.sort(key=lambda s: -(s["basis"] or 0))
+    return out_stocks, out_options
+
+
+def compute_holdings(txns, n_unique, n_files, include_cash=False, snapshot=None):
     """txns -> holdings payload dict (see docstring at top of file)."""
     books, accounts, flags = run_engine(txns)
 
@@ -496,6 +580,18 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
         for fl in sorted(sym_flags):
             warnings.append(f"{sym} (closed): {fl}")
 
+    if snapshot:
+        stocks, options = _merge_snapshot(stocks, options, snapshot, include_cash)
+    elif stocks or options:
+        # history alone CANNOT see positions opened before the earliest export
+        # row and untouched since — say so instead of under-counting silently.
+        ws = min(dates).isoformat() if dates else "?"
+        warnings.append(
+            f"counts come from transaction history starting {ws} — positions "
+            f"opened earlier and untouched since are NOT included. For "
+            f"authoritative totals put a Fidelity positions export "
+            f"(Portfolio_Positions*.csv) in the same folder.")
+
     flagged = sum(1 for s in stocks + options if s.get("flags"))
     if flagged:
         warnings.append(f"{flagged} symbol(s) have incomplete history — "
@@ -507,13 +603,18 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
         "windowEnd": max(dates).isoformat() if dates else None,
         "files": n_files,
         "rowsUnique": n_unique,
+        "source": "snapshot+history" if snapshot else "history",
+        "snapshotAsOf": snapshot["asof"] if snapshot else None,
+        "snapshotFile": snapshot["file"] if snapshot else None,
         "warnings": warnings,
     }
 
 
-def build_from_paths(paths, include_cash=False):
+def build_from_paths(paths, include_cash=False, positions_paths=None):
     txns, n_unique, notes = union_files(paths)
-    h = compute_holdings(txns, n_unique, len(paths), include_cash)
+    snapshot = load_newest_snapshot(positions_paths or [], notes)
+    h = compute_holdings(txns, n_unique, len(paths), include_cash,
+                         snapshot=snapshot)
     h["warnings"] = notes + h["warnings"]
     return h
 
@@ -521,6 +622,140 @@ def build_from_paths(paths, include_cash=False):
 def discover_csvs(directory):
     """All Accounts_History*.csv in a directory, stable order."""
     return sorted(glob.glob(os.path.join(directory, "Accounts_History*.csv")))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Positions snapshot (Portfolio_Positions*.csv) — the authoritative "what do
+#  I own right now" source. Transaction history only reaches back to the
+#  earliest export row; shares bought before that and untouched since leave
+#  NO trace in history, so a snapshot is the only way to get true totals.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def discover_positions(directory):
+    """All Portfolio_Positions*.csv in a directory (Fidelity's positions-
+    download default name), stable order."""
+    return sorted(glob.glob(os.path.join(directory, "Portfolio_Positions*.csv")))
+
+
+def _snapshot_asof(path):
+    """As-of date from Fidelity's filename (…_Jul-06-2026.csv), else mtime."""
+    m = re.search(r"([A-Za-z]{3})-(\d{2})-(\d{4})", os.path.basename(path))
+    if m:
+        try:
+            return dt.datetime.strptime("-".join(m.groups()), "%b-%d-%Y").date()
+        except ValueError:
+            pass
+    try:
+        return dt.date.fromtimestamp(os.stat(path).st_mtime)
+    except OSError:
+        return None
+
+
+def parse_positions_file(path):
+    """One Fidelity positions CSV -> (asof_date|None, rows).
+    rows: {acct, acct_name, symbol, desc, qty, basis|None, is_option}.
+    Raises ValueError on the known misaligned dialect (quoted header +
+    trailing commas shift every value one column left) — mirrors the
+    fail-loud gate in trade_journal._parse_positions; never fabricates."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        raw = list(csv.reader(f))
+    header_idx = None
+    for i, r in enumerate(raw):
+        cells = [str(c).strip().lower() for c in r]
+        if any(c == "symbol" for c in cells) and any("quantity" in c for c in cells) \
+                and not any(c == "run date" for c in cells):
+            header_idx = i
+            break
+    if header_idx is None:
+        raise ValueError("no positions header (Symbol/Quantity) found")
+    cols = [re.sub(r"\W+", "_", str(c).strip().lower()).strip("_")
+            for c in raw[header_idx]]
+
+    def find(*kws):
+        for j, c in enumerate(cols):
+            if all(k in c for k in kws):
+                return j
+        return None
+
+    i_sym = find("symbol")
+    i_qty = find("quantity")
+    i_cost = find("cost", "basis", "total")
+    if i_cost is None:
+        i_cost = find("cost", "total")
+    i_desc = find("description")
+    i_num = find("account", "number")
+    i_name = find("account", "name")
+    if i_name is None:
+        i_name = next((j for j, c in enumerate(cols)
+                       if "account" in c and j != i_num), None)
+    i_type = find("type")
+
+    def cell(r, j):
+        return str(r[j]).strip() if (j is not None and j < len(r)) else ""
+
+    # misalignment gate: quantity cells must read like counts, not $/%.
+    seen = ok = 0
+    for r in raw[header_idx + 1:]:
+        q = cell(r, i_qty)
+        if q in ("", "--", "n/a", "N/A"):
+            continue
+        seen += 1
+        if "$" not in q and "%" not in q:
+            try:
+                float(q.replace(",", ""))
+                ok += 1
+            except ValueError:
+                pass
+    if seen and ok / seen < 0.8:
+        raise ValueError(
+            f"positions CSV {os.path.basename(path)} looks column-shifted "
+            f"(quantity column holds currency/percent values) — refusing to "
+            f"parse rather than fabricate; re-export it from Fidelity")
+
+    rows = []
+    for r in raw[header_idx + 1:]:
+        sym = cell(r, i_sym).upper().rstrip("*")
+        if (not sym or sym.startswith("--") or "PENDING" in sym
+                or "TOTAL" in sym or " " in sym.strip()):
+            continue
+        qty = _num(cell(r, i_qty))
+        if abs(qty) < QTY_EPS:
+            continue
+        basis_raw = cell(r, i_cost)
+        basis = abs(_num(basis_raw)) if basis_raw not in ("", "--", "n/a", "N/A") else None
+        desc = cell(r, i_desc)
+        a_type = cell(r, i_type).upper()
+        is_opt = bool(OPTION_SYMBOL_RE.match(sym)) or "OPTION" in a_type \
+            or any(k in desc.upper() for k in ("CALL", "PUT"))
+        rows.append({
+            "acct": cell(r, i_num) or "?",
+            "acct_name": cell(r, i_name),
+            "symbol": sym,
+            "desc": desc,
+            "qty": qty,
+            "basis": basis,
+            "is_option": is_opt,
+        })
+    return _snapshot_asof(path), rows
+
+
+def load_newest_snapshot(paths, notes):
+    """Parse every positions CSV, keep the newest by as-of date.
+    Unparseable files degrade to a note, never an exception."""
+    best = None
+    for p in paths:
+        try:
+            asof, rows = parse_positions_file(p)
+        except (ValueError, OSError, UnicodeDecodeError, csv.Error) as e:
+            notes.append(f"positions snapshot {os.path.basename(p)} unusable: {e}")
+            continue
+        if not rows:
+            continue
+        key = asof or dt.date.min
+        if best is None or key > best[0]:
+            best = (key, {"asof": asof.isoformat() if asof else None,
+                          "file": os.path.basename(p), "rows": rows})
+    return best[1] if best else None
 
 
 def default_csv_dir():
@@ -704,6 +939,63 @@ def selftest():
         assert n_unique == 1 and len(txns) == 1
         assert notes and "skipped unreadable" in notes[0], notes
 
+    # 10. Positions snapshot: parse (with $ values, ** suffix, Pending row),
+    #     snapshot wins over history, mismatch quantified, engine-only kept.
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as td:
+        pp = os.path.join(td, "Portfolio_Positions_Jul-06-2026.csv")
+        with open(pp, "w", encoding="utf-8") as f:
+            f.write(
+                "Account Number,Account Name,Symbol,Description,Quantity,"
+                "Last Price,Current Value,Cost Basis Total,Average Cost Basis,Type\n"
+                'X17212229,Joint WROS - TOD,TSLA,TESLA INC COM,80,$400.00,'
+                '"$32,000.00","$28,000.00",$350.00,Margin\n'
+                "235498151,ROTH IRA,TSLA,TESLA INC COM,23,$400.00,"
+                '"$9,200.00","$8,100.00",$352.17,Cash\n'
+                "X83768586,Joint WROS - TOD,SPAXX**,FIDELITY GOVT MONEY MARKET,"
+                "512.05,$1.00,$512.05,--,--,Cash\n"
+                "Pending Activity,,,,,,$99.00,,,\n"
+                ',,,"The data and information in this spreadsheet",,,,,,\n')
+        asof, rows = parse_positions_file(pp)
+        assert asof == dt.date(2026, 7, 6) and len(rows) == 3, (asof, rows)
+        assert rows[0]["qty"] == 80 and rows[0]["basis"] == 28000.00
+        assert rows[2]["symbol"] == "SPAXX" and rows[2]["basis"] is None
+
+        snap = {"asof": "2026-07-06", "file": os.path.basename(pp), "rows": rows}
+        txns = [_tx("2026-03-01", "BUY", "TSLA", "X17212229", 20, 400, -8000.00)]
+        h = compute_holdings(txns, 1, 1, snapshot=snap)
+        s = h["stocks"][0]
+        assert s["t"] == "TSLA" and abs(s["shares"] - 103) < 1e-9, s
+        assert abs(s["basis"] - 36100.00) < 0.01 and len(s["accounts"]) == 2
+        assert any("covers 20" in f and "103" in f for f in s["flags"]), s["flags"]
+        assert h["source"] == "snapshot+history" and h["snapshotAsOf"] == "2026-07-06"
+        assert not any("NOT included" in w for w in h["warnings"])
+
+        # engine-only symbol (not in snapshot) is kept and flagged
+        txns.append(_tx("2026-07-01", "BUY", "MU", "X17212229", 2, 100, -200.00))
+        h = compute_holdings(txns, 2, 1, snapshot=snap)
+        mu = [x for x in h["stocks"] if x["t"] == "MU"][0]
+        assert abs(mu["shares"] - 2) < 1e-9
+        assert any("not in the positions snapshot" in f for f in mu["flags"])
+
+        # misaligned (column-shifted) snapshot is refused, not fabricated
+        bad = os.path.join(td, "Portfolio_Positions_bad.csv")
+        with open(bad, "w", encoding="utf-8") as f:
+            f.write("Account Number,Account Name,Symbol,Description,Quantity,"
+                    "Last Price,Cost Basis Total\n"
+                    "X1,Joint,TSLA,TESLA INC COM,$400.00,$32000.00,$28000.00\n")
+        try:
+            parse_positions_file(bad)
+            raise AssertionError("misaligned snapshot was NOT refused")
+        except ValueError:
+            pass
+        notes = []
+        assert load_newest_snapshot([bad], notes) is None and notes
+
+    # 10b. History-only mode states its blind spot explicitly.
+    h = compute_holdings([_tx("2026-03-01", "BUY", "TSLA", "X1", 1, 400, -400)], 1, 1)
+    assert any("NOT included" in w for w in h["warnings"]), h["warnings"]
+
     # 9. Consistency: FIFO net equals the signed quantity sum per symbol.
     txns = [
         _tx("2026-01-07", "BUY", "MU", "X17212229", 5, 100, -500),
@@ -719,7 +1011,8 @@ def selftest():
     assert "flags" not in s
 
     print("holdings selftest OK — aggregate/FIFO basis, transfers, reinvest, "
-          "oversell flag, money-market filter, options, dedup, consistency")
+          "oversell flag, money-market filter, options, dedup, positions "
+          "snapshot (parse/merge/misalignment-refusal), consistency")
     return 0
 
 
@@ -737,8 +1030,12 @@ def main(argv=None):
                     "Fidelity Accounts_History CSVs")
     ap.add_argument("--csv", action="append", default=None,
                     help="a CSV to include (repeatable)")
+    ap.add_argument("--positions", action="append", default=None,
+                    help="a Fidelity Portfolio_Positions CSV — authoritative "
+                         "current counts/basis (repeatable; newest wins)")
     ap.add_argument("--dir", default=None,
-                    help="directory to scan for Accounts_History*.csv "
+                    help="directory to scan for Accounts_History*.csv and "
+                         "Portfolio_Positions*.csv "
                          "(default: the journal app's last CSV's folder)")
     ap.add_argument("--symbol", default=None, help="only this symbol")
     ap.add_argument("--json", action="store_true", help="emit JSON")
@@ -751,18 +1048,23 @@ def main(argv=None):
         return selftest()
 
     paths = list(args.csv or [])
-    if args.dir:
-        paths += discover_csvs(args.dir)
-    if not paths:
+    ppaths = list(args.positions or [])
+    scan_dirs = [args.dir] if args.dir else []
+    if not paths and not scan_dirs:
         d = default_csv_dir()
         if d:
-            paths = discover_csvs(d)
+            scan_dirs = [d]
+    for d in scan_dirs:
+        paths += discover_csvs(d)
+        ppaths += discover_positions(d)
     paths = [p for p in dict.fromkeys(paths) if os.path.isfile(p)]
-    if not paths:
+    ppaths = [p for p in dict.fromkeys(ppaths) if os.path.isfile(p)]
+    if not paths and not ppaths:
         print("ERROR: no CSVs found — pass --csv FILE or --dir DIR", file=sys.stderr)
         return 1
 
-    h = build_from_paths(paths, include_cash=args.include_cash)
+    h = build_from_paths(paths, include_cash=args.include_cash,
+                         positions_paths=ppaths)
     if args.symbol:
         want = args.symbol.upper()
         h["stocks"] = [s for s in h["stocks"] if s["t"] == want]
@@ -774,8 +1076,11 @@ def main(argv=None):
         print(json.dumps(h, indent=1))
         return 0
 
-    print(f"Holdings across accounts — {h['files']} file(s), "
-          f"{h['rowsUnique']} unique rows, window {h['windowStart']} → {h['windowEnd']}")
+    snap = (f", positions snapshot {h['snapshotAsOf'] or 'undated'} "
+            f"({h['snapshotFile']})" if h.get("snapshotFile") else "")
+    print(f"Holdings across accounts — {h['files']} history file(s), "
+          f"{h['rowsUnique']} unique rows, window {h['windowStart']} → "
+          f"{h['windowEnd']}{snap}")
     print("=" * 78)
     if not h["stocks"]:
         print("(no open stock positions in the data window)")
