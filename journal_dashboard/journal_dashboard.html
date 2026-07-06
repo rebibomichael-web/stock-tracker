@@ -249,6 +249,20 @@
     .stale-w { color: #b8860b; cursor: help; }
     .empty { color: #999; font-size: 11.5px; padding: 4px 2px; }
 
+    /* ── Paper Ledger (desktop) ── */
+    .paper-btn { font-weight: bold; cursor: pointer; border-radius: 3px; padding: 3px 10px; font-size: 11px; white-space: nowrap; }
+    .paper-btn.buy { background: #eaf5e6; color: #2c7a2c; border: 1px solid #a9d5a0; }
+    .paper-btn.buy:hover { background: #dcf0d5; }
+    .paper-btn.sell { background: #fdeceb; color: #b0392b; border: 1px solid #e6a49c; }
+    .paper-btn.sell:hover { background: #fbdcd9; }
+    .paper-btn.x { background: none; color: #999; border: 1px solid #ddd; padding: 2px 7px; font-size: 10px; }
+    .paper-btn.x:hover { color: #c0392b; border-color: #e6a49c; }
+    .paper-badge { color: #999; font-size: 10px; margin-left: 4px; }
+    .paper-note { color: #999; font-size: 11px; margin-bottom: 8px; }
+    .paper-sub-title { font-weight: bold; font-size: 11.5px; color: #555; margin: 10px 0 4px; }
+    .paper-summary { font-size: 11.5px; color: #555; margin-top: 6px; }
+    .paper-summary b { color: #333; }
+
     footer { margin-top: 14px; color: #999; font-size: 11px; text-align: center; }
 
     /* ── Trade Journal (desktop) ── */
@@ -533,6 +547,17 @@
     .stale-w { color: #e3b341; cursor: help; }
     .empty { color: #8b93a3; font-size: 12px; padding: 6px 2px; }
 
+    /* ── Paper Ledger (mobile) ── */
+    .paper-btn { font-weight: 700; cursor: pointer; border-radius: 7px; padding: 5px 12px; font-size: 11.5px; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+    .paper-btn.buy { background: #173425; color: #c9f4d9; border: 1px solid #2b5c3f; }
+    .paper-btn.sell { background: #4a1f1e; color: #ffd7d5; border: 1px solid #7c3230; }
+    .paper-btn.x { background: none; color: #6b7482; border: 1px solid #2a303c; padding: 3px 8px; font-size: 10px; }
+    .paper-badge { color: #6b7482; font-size: 10px; margin-left: 4px; }
+    .paper-note { color: #6b7482; font-size: 11px; margin-bottom: 8px; }
+    .paper-sub-title { font-weight: 700; font-size: 11.5px; color: #d7dce6; margin: 10px 0 4px; }
+    .paper-summary { font-size: 11.5px; color: #9aa3b2; margin-top: 6px; }
+    .paper-summary b { color: #d7dce6; }
+
     footer { margin: 20px auto 0; padding: 0 12px 26px; font-size: 10.5px; color: #6b7482; text-align: center; }
 
     /* ── Trade Journal (mobile) ── */
@@ -704,6 +729,17 @@
       <span class="sec-sub desk-only" id="o75Sub"></span>
     </summary>
     <div class="sec-body" id="o75"></div>
+  </details>
+
+  <details class="sec" id="sec-paper" open>
+    <summary>
+      <span class="emo">📝</span>
+      <span class="t-desk">Paper Ledger — 100 units per signal</span>
+      <span class="t-mob">Paper Ledger</span>
+      <span class="cnt mob-only" id="paperCnt"></span>
+      <span class="sec-sub desk-only" id="paperSub"></span>
+    </summary>
+    <div class="sec-body" id="paperBody"></div>
   </details>
 
   <footer id="foot">Journal Dashboard — desktop = Finviz Light · phone = Mobile Compact · static sample data (journal_data.js not found)</footer>
@@ -1690,9 +1726,10 @@ function loadJournals() {
     if (!rows.length) { $("o75").innerHTML = '<div class="empty">none today</div>'; return; }
     let h = '<div class="tblwrap"><table><thead><tr>' +
       "<th>Symbol</th><th>Price</th><th>RSI</th><th>Tech</th><th>BT±</th><th>Final</th>" +
-      '<th>Swing%</th><th>ARB</th><th class="cl">Signal</th><th class="cl">Opinion</th></tr></thead><tbody>';
+      '<th>Swing%</th><th>ARB</th><th class="cl">Signal</th><th class="cl">Opinion</th><th class="cl">Paper</th></tr></thead><tbody>';
     rows.forEach(r => {
       const cls = r.signal === "ACT NOW" ? "row-act" : r.signal === "BUY" ? "row-buy" : "row-watch";
+      const openCount = countOpenPaper(r.t);
       h += '<tr class="' + cls + '">' +
         '<td class="tk-cell">' + esc(r.t) + "</td>" +
         '<td class="num">$' + fmtPrice(r.price) + "</td>" +
@@ -1703,10 +1740,164 @@ function loadJournals() {
         '<td class="num">' + sPct(r.swingPct, 1) + "</td>" +
         '<td class="num ' + pctCls(r.arb) + '">' + sNum(r.arb) + "</td>" +
         '<td class="cl">' + sigBadge(r.signal) + "</td>" +
-        '<td class="cl ' + arrowCls(String(r.opinion == null ? "—" : r.opinion)) + '">' + esc(r.opinion == null ? "—" : r.opinion) + "</td></tr>";
+        '<td class="cl ' + arrowCls(String(r.opinion == null ? "—" : r.opinion)) + '">' + esc(r.opinion == null ? "—" : r.opinion) + "</td>" +
+        '<td class="cl">' + (r.price != null
+          ? '<button type="button" class="paper-btn buy" data-t="' + esc(r.t) + '" data-price="' + r.price + '">Buy Now</button>' +
+            (openCount ? '<span class="paper-badge">(' + openCount + " open)</span>" : "")
+          : "—") + "</td></tr>";
     });
     $("o75").innerHTML = h + "</tbody></table></div>";
   }
+
+  // ── Paper Ledger — simulated 100-unit trades off Over-75 signals ──────
+  // Client-side only (localStorage): never touches real broker data, never
+  // written to journal_data.js. 100 units fixed so % return is the number
+  // that's comparable across tickers regardless of share price.
+  const PAPER_KEY = "journalPaperTradesV1";
+  function loadPaper() {
+    try { return JSON.parse(localStorage.getItem(PAPER_KEY) || "[]"); }
+    catch (e) { return []; }
+  }
+  function savePaper(list) {
+    try { localStorage.setItem(PAPER_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function countOpenPaper(ticker) {
+    return loadPaper().filter(t => t.ticker === ticker && t.status === "open").length;
+  }
+  // Most recent known quote for a ticker across ALL loaded dates (not just
+  // whichever date tab is open) — newest date wins, so "Sell Now" reflects
+  // the latest available price regardless of what's currently displayed.
+  function findQuote(ticker) {
+    for (let i = DATES.length - 1; i >= 0; i--) {
+      const d = JOURNALS[DATES[i]];
+      const pools = [
+        (d.swing && d.swing.actNow) || [],
+        (d.swing && d.swing.over75) || [],
+        d.heatmap || [],
+        (d.leaps && d.leaps.original) || [],
+        (d.leaps && d.leaps.exceeders) || [],
+      ];
+      for (const pool of pools) {
+        const hit = pool.find(r => r.t === ticker && r.price != null);
+        if (hit) return { price: hit.price, asOf: DATES[i] };
+      }
+    }
+    return null;
+  }
+  function buyNow(ticker, price) {
+    const list = loadPaper();
+    list.push({
+      id: Date.now() + "-" + ticker + "-" + Math.random().toString(36).slice(2, 7),
+      ticker: ticker, units: 100, entryPrice: price,
+      entryAt: new Date().toISOString(), entryAsOf: selected,
+      status: "open", exitPrice: null, exitAt: null, exitAsOf: null,
+    });
+    savePaper(list);
+    renderOver75(JOURNALS[selected]);     // refresh the "(N open)" badge
+    renderPaperLedger();
+  }
+  function sellNow(id) {
+    const list = loadPaper();
+    const t = list.find(x => x.id === id);
+    if (!t) return;
+    const q = findQuote(t.ticker);
+    let price = q ? q.price : null;
+    let asOf = q ? q.asOf : null;
+    if (price == null) {
+      const typed = window.prompt(
+        t.ticker + " has no known quote in the loaded dates — enter the exit price manually:");
+      if (typed == null) return;                        // cancelled
+      price = parseFloat(typed);
+      if (!isFinite(price) || price <= 0) { window.alert("Not a valid price."); return; }
+      asOf = "manual";
+    }
+    t.exitPrice = price; t.exitAt = new Date().toISOString(); t.exitAsOf = asOf;
+    t.status = "closed";
+    savePaper(list);
+    renderPaperLedger();
+  }
+  function removePaper(id) {
+    savePaper(loadPaper().filter(t => t.id !== id));
+    renderOver75(JOURNALS[selected]);
+    renderPaperLedger();
+  }
+  function paperPL(t) { return (t.exitPrice - t.entryPrice) * t.units; }
+  function paperPct(t) { return (t.exitPrice - t.entryPrice) / t.entryPrice * 100; }
+  function fmtDollar(v) {
+    if (v == null) return "—";
+    return (v < 0 ? "-$" : "+$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtWhen(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? String(iso) : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+      " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+  function renderPaperLedger() {
+    const all = loadPaper();
+    const open = all.filter(t => t.status === "open").sort((a, b) => b.entryAt.localeCompare(a.entryAt));
+    const closed = all.filter(t => t.status === "closed").sort((a, b) => (b.exitAt || "").localeCompare(a.exitAt || ""));
+    $("paperCnt").textContent = "(" + open.length + ")";
+    $("paperSub").textContent = open.length + " open · " + closed.length + " closed";
+    let h = '<div class="paper-note">Simulated — 100 units per entry, saved only in this browser. Not a real trade, not connected to your broker.</div>';
+    if (!open.length && !closed.length) {
+      h += '<div class="empty">No paper trades yet — click "Buy Now" on a signal in the Over-75 table above.</div>';
+      $("paperBody").innerHTML = h;
+      return;
+    }
+    if (open.length) {
+      h += '<div class="paper-sub-title">Open</div><div class="tblwrap"><table><thead><tr>' +
+        '<th class="cl">Symbol</th><th>Entry</th><th class="cl">Opened</th><th>Now</th><th>% now</th><th></th></tr></thead><tbody>';
+      open.forEach(t => {
+        const q = findQuote(t.ticker);
+        const pct = q ? (q.price - t.entryPrice) / t.entryPrice * 100 : null;
+        h += "<tr>" +
+          '<td class="cl tk-cell">' + esc(t.ticker) + "</td>" +
+          '<td class="num">$' + fmtPrice(t.entryPrice) + "</td>" +
+          '<td class="cl">' + esc(fmtWhen(t.entryAt)) + (t.entryAsOf ? ' <span class="paper-badge">' + esc(t.entryAsOf) + "</span>" : "") + "</td>" +
+          '<td class="num">' + (q ? "$" + fmtPrice(q.price) : "—") + "</td>" +
+          '<td class="num ' + pctCls(pct) + '">' + sPct(pct, 1) + "</td>" +
+          '<td class="cl">' +
+            '<button type="button" class="paper-btn sell" data-sell="' + t.id + '">Sell Now</button> ' +
+            '<button type="button" class="paper-btn x" data-remove="' + t.id + '" title="Remove">✕</button>' +
+          "</td></tr>";
+      });
+      h += "</tbody></table></div>";
+    }
+    if (closed.length) {
+      const wins = closed.filter(t => paperPL(t) > 0).length;
+      h += '<div class="paper-sub-title">Closed</div><div class="tblwrap"><table><thead><tr>' +
+        '<th class="cl">Symbol</th><th>Entry</th><th>Exit</th><th>P/L $</th><th>P/L %</th><th class="cl">Closed</th><th></th></tr></thead><tbody>';
+      closed.forEach(t => {
+        const pl = paperPL(t), pct = paperPct(t);
+        h += "<tr>" +
+          '<td class="cl tk-cell">' + esc(t.ticker) + "</td>" +
+          '<td class="num">$' + fmtPrice(t.entryPrice) + "</td>" +
+          '<td class="num">$' + fmtPrice(t.exitPrice) + "</td>" +
+          '<td class="num ' + pctCls(pl) + '"><b>' + fmtDollar(pl) + "</b></td>" +
+          '<td class="num ' + pctCls(pct) + '">' + sPct(pct, 1) + "</td>" +
+          '<td class="cl">' + esc(fmtWhen(t.exitAt)) + "</td>" +
+          '<td class="cl"><button type="button" class="paper-btn x" data-remove="' + t.id + '" title="Remove">✕</button></td></tr>';
+      });
+      h += "</tbody></table></div>";
+      const avgPct = closed.reduce((s, t) => s + paperPct(t), 0) / closed.length;
+      h += '<div class="paper-summary"><b>' + closed.length + "</b> closed · win rate <b>" +
+        Math.round(wins / closed.length * 100) + "%</b> · avg <b>" + sPct(avgPct, 1) + "</b> per trade</div>";
+    }
+    $("paperBody").innerHTML = h;
+  }
+
+  $("o75").addEventListener("click", e => {
+    const btn = e.target.closest(".paper-btn.buy");
+    if (!btn) return;
+    buyNow(btn.dataset.t, parseFloat(btn.dataset.price));
+  });
+  $("paperBody").addEventListener("click", e => {
+    const sellBtn = e.target.closest("[data-sell]");
+    if (sellBtn) { sellNow(sellBtn.dataset.sell); return; }
+    const rmBtn = e.target.closest("[data-remove]");
+    if (rmBtn) removePaper(rmBtn.dataset.remove);
+  });
 
   // ── render everything from selected date ──────────────
   function renderAll() {
@@ -1826,6 +2017,7 @@ function loadJournals() {
   buildChips();
   applyMode();
   renderAll();
+  renderPaperLedger();
 })();
 </script>
 
