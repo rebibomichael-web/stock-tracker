@@ -298,7 +298,8 @@
     tr.jr-excl .tk-cell { color: #999; }
     .jr-tradeshdr { font-size: 11px; font-weight: bold; color: #444; margin: 10px 0 4px; }
     .jr-acctrow td { color: #888; font-size: 11px; }
-    .jr-acctrow td:nth-child(2) { padding-left: 18px; }
+    .jr-acctrow td:first-child { padding-left: 18px; font-weight: 600; }
+    .jr-flagnote { display: none; }
     .jr-foot { margin-top: 8px; font-size: 10.5px; color: #999; font-variant-numeric: tabular-nums; }
   }
 
@@ -580,7 +581,14 @@
     .jr-tblwrap table { min-width: 620px; }
     .jr-tradeshdr { margin: 12px 2px 0; font-size: 12.5px; font-weight: 700; color: #d7dce6; }
     .jr-acctrow td { color: #9aa3b2; font-size: 11px; }
-    .jr-acctrow td:nth-child(2) { padding-left: 18px; }
+    .jr-acctrow td:first-child { padding-left: 18px; font-weight: 600; }
+    .jr-flagnote { display: none; }
+    @media (max-width: 719.98px) {
+      /* touch: title-tooltips are unreachable — show the flag text inline */
+      .jr-flagnote { display: block; font-size: 10px; opacity: .78; white-space: normal; max-width: 16em; font-weight: 400; }
+      /* keep the sticky account label from over-widening the pinned column */
+      .jr-acctrow td:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
     .jr-foot { margin-top: 10px; font-size: 10.5px; color: #8b93a3; font-variant-numeric: tabular-nums; }
   }
   @keyframes jrshake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
@@ -2121,34 +2129,43 @@ function loadJournals() {
     return v == null ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 4 });
   }
   function holdingsFlags(row) {
-    return (row.flags && row.flags.length)
-      ? ' <span class="jr-schip ex" title="' + esc(row.flags.join(" · ")) + '">⚠</span>' : "";
+    if (!(row.flags && row.flags.length)) return "";
+    var txt = esc(row.flags.join(" · "));
+    // title = desktop hover; .jr-flagnote = inline fallback for touch (CSS
+    // shows it only under the mobile breakpoint, where title is unreachable)
+    return ' <span class="jr-schip ex" title="' + txt + '">⚠</span>' +
+      '<span class="jr-flagnote">' + txt + "</span>";
   }
   function holdingsTable(j) {
     var hd = j.holdings;
     if (!hd || !((hd.stocks || []).length || (hd.options || []).length)) return "";
-    var h = '<div class="jr-tradeshdr">Holdings across accounts <span class="jr-cs">(' +
-      (hd.stocks || []).length + " stocks · adj basis of remaining shares · all ranges)</span></div>";
-    h += '<div class="tblwrap jr-tblwrap"><table><thead><tr>' +
-      '<th class="cl">Ticker</th><th class="cl">Account</th><th>Shares</th>' +
-      "<th>Adj basis</th><th>Basis/share</th></tr></thead><tbody>";
-    (hd.stocks || []).forEach(function (s) {
-      var accts = s.accounts || [];
-      var acctCell = accts.length === 1 ? esc(accts[0].a)
-        : accts.length ? accts.length + " accounts" : "—";
-      h += '<tr><td class="cl tk-cell"><b>' + esc(s.t) + "</b>" + holdingsFlags(s) + "</td>" +
-        '<td class="cl">' + acctCell + "</td>" +
-        '<td class="num"><b>' + fmtShares(s.shares) + "</b></td>" +
-        '<td class="num"><b>' + moneyPlain(s.basis, 2) + "</b></td>" +
-        '<td class="num">' + (s.bps != null ? moneyPlain(s.bps, 2) : "—") + "</td></tr>";
-      if (accts.length > 1) accts.forEach(function (a) {
-        h += '<tr class="jr-acctrow"><td class="cl"></td><td class="cl">' + esc(a.a) + "</td>" +
-          '<td class="num">' + fmtShares(a.shares) + "</td>" +
-          '<td class="num">' + moneyPlain(a.basis, 2) + "</td>" +
-          '<td class="num">' + (a.bps != null ? moneyPlain(a.bps, 2) : "—") + "</td></tr>";
+    var h = "";
+    if ((hd.stocks || []).length) {
+      h += '<div class="jr-tradeshdr">Holdings across accounts <span class="jr-cs">(' +
+        hd.stocks.length + " stocks · adj basis of remaining shares · all ranges)</span></div>";
+      h += '<div class="tblwrap jr-tblwrap"><table><thead><tr>' +
+        '<th class="cl">Ticker</th><th class="cl">Account</th><th>Shares</th>' +
+        "<th>Adj basis</th><th>Basis/share</th></tr></thead><tbody>";
+      hd.stocks.forEach(function (s) {
+        var accts = s.accounts || [];
+        var acctCell = accts.length === 1 ? esc(accts[0].a)
+          : accts.length ? accts.length + " accounts" : "—";
+        h += '<tr><td class="cl tk-cell"><b>' + esc(s.t) + "</b>" + holdingsFlags(s) + "</td>" +
+          '<td class="cl">' + acctCell + "</td>" +
+          '<td class="num"><b>' + fmtShares(s.shares) + "</b></td>" +
+          '<td class="num"><b>' + moneyPlain(s.basis, 2) + "</b></td>" +
+          '<td class="num">' + (s.bps != null ? moneyPlain(s.bps, 2) : "—") + "</td></tr>";
+        // account label goes in the FIRST cell: on mobile that column is
+        // sticky, so the label stays attributable while the row scrolls
+        if (accts.length > 1) accts.forEach(function (a) {
+          h += '<tr class="jr-acctrow"><td class="cl">' + esc(a.a) + '</td><td class="cl"></td>' +
+            '<td class="num">' + fmtShares(a.shares) + "</td>" +
+            '<td class="num">' + moneyPlain(a.basis, 2) + "</td>" +
+            '<td class="num">' + (a.bps != null ? moneyPlain(a.bps, 2) : "—") + "</td></tr>";
+        });
       });
-    });
-    h += "</tbody></table></div>";
+      h += "</tbody></table></div>";
+    }
     if ((hd.options || []).length) {
       h += '<div class="jr-tradeshdr">Options held <span class="jr-cs">(contracts, tracked separately)</span></div>';
       h += '<div class="tblwrap jr-tblwrap"><table><thead><tr>' +

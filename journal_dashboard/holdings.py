@@ -50,7 +50,12 @@ from collections import defaultdict
 # (their share counts are meaningless — cash movements don't all appear here).
 MONEY_MARKET = {"SPAXX", "FDRXX", "SPRXX", "FZFXX", "FCASH", "CORE"}
 
-OPTION_SYMBOL_RE = re.compile(r"^-?[A-Z]{1,6}\d{6}[CP][\d.]+$")
+OPTION_SYMBOL_RE = re.compile(r"^-?([A-Z]{1,6})\d{6}[CP][\d.]+$")
+
+# CUSIP-shaped symbol (9 chars, digit first and last — never a ticker or an
+# option symbol). Fidelity sometimes switches a security's Symbol cell from
+# the ticker to its CUSIP between exports; see union_files().
+CUSIP_RE = re.compile(r"^[0-9][0-9A-Z]{7}[0-9]$")
 
 # Friendly short names for Fidelity account labels (fallback: label as-is).
 ACCOUNT_SHORT = {
@@ -87,20 +92,25 @@ def _parse_date(s):
 
 
 def classify_action(action):
-    """Map a Fidelity Action string to a transaction kind (or None)."""
-    a = str(action or "").upper()
-    if "BOUGHT" in a or ("BUY" in a and "BUYS" not in a):
-        return "BUY"
-    if "SOLD" in a or "SELL" in a:
-        return "SELL"
-    if "REINVESTMENT" in a:
+    """Map a Fidelity Action string to a transaction kind (or None).
+    Anchored prefixes, most-specific first — bare substrings would misread
+    security NAMES ('ISHARES RUSSELL 2000' contains SELL, 'BEST BUY' contains
+    BUY). Every trade row Fidelity exports starts with 'YOU BOUGHT'/'YOU SOLD'
+    (including 'YOU BOUGHT ASSIGNED PUTS...', which is a BUY, vs the bare
+    'ASSIGNED as of ...' option-removal row)."""
+    a = str(action or "").upper().strip()
+    if a.startswith("REINVESTMENT"):
         return "REINVEST"
-    if "TRANSFERRED" in a:
+    if a.startswith("TRANSFERRED"):
         return "TRANSFER"
-    if "EXPIRED" in a:
+    if a.startswith("EXPIRED"):
         return "EXPIRE"
     if a.startswith("ASSIGNED"):
         return "ASSIGN"
+    if a.startswith("YOU BOUGHT"):
+        return "BUY"
+    if a.startswith("YOU SOLD"):
+        return "SELL"
     return None
 
 
@@ -164,19 +174,70 @@ def parse_file(path):
 
 
 def _txn_key(t):
+    # hint distinguishes same-day equal-qty transfers to DIFFERENT
+    # destinations (None for every non-transfer row).
     return (t["date"].isoformat(), t["kind"], t["symbol"], t["acct"],
-            round(t["qty"], 6), round(t["price"], 6), round(t["amount"], 4))
+            round(t["qty"], 6), round(t["price"], 6), round(t["amount"], 4),
+            t["hint"])
+
+
+def _desc_key(t):
+    return re.sub(r"\s+", " ", t["desc"]).strip().upper()
+
+
+def _normalize_cusips(parsed_files):
+    """Fidelity sometimes flips a security's Symbol between ticker and CUSIP
+    across exports (real case: HON vs 438516106, description identical up to
+    a trailing ' 1'). Rewrite CUSIP-shaped symbols to the ticker whose
+    description matches; return the set that could not be mapped."""
+    desc2sym = {}
+    for rows in parsed_files:
+        for t in rows:
+            if t["symbol"] and not CUSIP_RE.match(t["symbol"]):
+                desc2sym.setdefault(_desc_key(t), t["symbol"])
+    unmapped = set()
+    for rows in parsed_files:
+        for t in rows:
+            if not CUSIP_RE.match(t["symbol"]):
+                continue
+            dk = _desc_key(t)
+            mapped = desc2sym.get(dk)
+            if mapped is None:
+                for k, v in desc2sym.items():
+                    if k and (dk.startswith(k) or k.startswith(dk)):
+                        mapped = v
+                        break
+            if mapped:
+                t["symbol"] = mapped
+            else:
+                unmapped.add(t["symbol"])
+    return unmapped
 
 
 def union_files(paths):
     """Union overlapping exports. Each unique row's multiplicity = the MAX
     count seen in any single file (collapses re-export duplicates, keeps
-    genuinely repeated identical fills). Returns (txns, n_unique_rows)."""
+    genuinely repeated identical fills). CUSIP-shaped symbols are normalized
+    to their ticker first so the same fill exported under both spellings
+    dedups. Returns (txns, n_unique_rows, notes) — notes are data-quality
+    warnings (skipped files, unmappable CUSIPs)."""
+    notes = []
+    parsed_files = []
+    for p in paths:
+        try:
+            parsed_files.append(parse_file(p))
+        except (UnicodeDecodeError, csv.Error, OSError) as e:
+            notes.append(f"skipped unreadable CSV {os.path.basename(p)}: {e}")
+            print(f"WARNING: skipping unreadable CSV {p}: {e}", file=sys.stderr)
+    unmapped = _normalize_cusips(parsed_files)
+    if unmapped:
+        notes.append("CUSIP-labeled symbol(s) with no ticker match kept as-is: "
+                     + ", ".join(sorted(unmapped)))
     max_mult = {}
     first = {}
-    for p in paths:
+    for rows in parsed_files:
         counts = defaultdict(int)
-        for t in parse_file(p):
+        for t in rows:
             k = _txn_key(t)
             counts[k] += 1
             if k not in first:
@@ -187,7 +248,7 @@ def union_files(paths):
     txns = []
     for k, t in first.items():
         txns.extend([t] * max_mult[k])
-    return txns, len(first)
+    return txns, len(first), notes
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -214,10 +275,15 @@ class Book:
                               "date": date, "est": est})
 
     def remove(self, qty):
-        """qty > 0. Consume lots FIFO; returns (removed_lots, shortfall)."""
+        """qty > 0. Consume lots FIFO **by acquisition date** (a transferred-in
+        lot keeps its original date and may be OLDER than lots already here —
+        true FIFO disposes earliest-acquired first). min() is stable, so
+        same-date lots fall back to insertion order.
+        Returns (removed_lots, shortfall)."""
         removed = []
         while qty > QTY_EPS and self.lots:
-            lot = self.lots[0]
+            i = min(range(len(self.lots)), key=lambda j: self.lots[j]["date"])
+            lot = self.lots[i]
             take = min(qty, lot["qty"])
             frac = take / lot["qty"]
             removed.append({"qty": take, "basis": lot["basis"] * frac,
@@ -225,7 +291,7 @@ class Book:
             lot["qty"] -= take
             lot["basis"] -= lot["basis"] * frac if lot["qty"] > QTY_EPS else lot["basis"]
             if lot["qty"] <= QTY_EPS:
-                self.lots.pop(0)
+                self.lots.pop(i)
             qty -= take
         shortfall = qty if qty > QTY_EPS else 0.0
         self.uncovered += shortfall
@@ -385,6 +451,11 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
         sym_flags = sorted(flags.get(sym, ()))
         if est:
             sym_flags.append("basis partly estimated (unmatched transfer)")
+        if tot_unc > QTY_EPS:
+            sym_flags.append(
+                f"basis and basis/share cover the {_r(tot_sh, 4)} share(s) with "
+                f"known lots; share count is net of {_r(tot_unc, 4)} uncovered "
+                f"pre-window sale(s)")
         if abs(net) < QTY_EPS and not sym_flags:
             continue
         row = {
@@ -394,6 +465,9 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
             "bps": _r(tot_basis / tot_sh, 2) if tot_sh > QTY_EPS else None,
             "accounts": acct_rows,
         }
+        if tot_unc > QTY_EPS:
+            row["lotShares"] = _r(tot_sh, 4)   # what basis/bps refer to
+            row["uncovered"] = _r(tot_unc, 4)
         if sym_flags:
             row["flags"] = sym_flags
         if is_opt:
@@ -407,6 +481,21 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
     stocks.sort(key=lambda s: -(s["basis"] or 0))
     options.sort(key=lambda s: -(s["basis"] or 0))
     dates = [t["date"] for t in txns]
+
+    # Flags on symbols whose books ended flat (e.g. an assignment closing a
+    # pre-window short) would otherwise vanish — surface them as warnings.
+    # For a flat OPTION book, a lone sell-side-shortfall flag is a routine
+    # short round trip (sold to open, closed in-window), not missing history.
+    emitted = {r["t"] for r in stocks + options}
+    for sym in sorted(set(flags) - emitted):
+        if not include_cash and sym in MONEY_MARKET:
+            continue
+        sym_flags = flags[sym]
+        if OPTION_SYMBOL_RE.match(sym):
+            sym_flags = {f for f in sym_flags if not f.startswith("sold more")}
+        for fl in sorted(sym_flags):
+            warnings.append(f"{sym} (closed): {fl}")
+
     flagged = sum(1 for s in stocks + options if s.get("flags"))
     if flagged:
         warnings.append(f"{flagged} symbol(s) have incomplete history — "
@@ -423,8 +512,10 @@ def compute_holdings(txns, n_unique, n_files, include_cash=False):
 
 
 def build_from_paths(paths, include_cash=False):
-    txns, n_unique = union_files(paths)
-    return compute_holdings(txns, n_unique, len(paths), include_cash)
+    txns, n_unique, notes = union_files(paths)
+    h = compute_holdings(txns, n_unique, len(paths), include_cash)
+    h["warnings"] = notes + h["warnings"]
+    return h
 
 
 def discover_csvs(directory):
@@ -446,7 +537,8 @@ def default_csv_dir():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Self-test — synthetic rows, zero file/network access
+#  Self-test — synthetic rows, zero network access (case 8 round-trips two
+#  tiny CSVs through a private temp dir; everything else is in-memory)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _tx(date, kind, sym, acct, qty, price=0.0, amount=0.0, hint=None,
@@ -488,13 +580,34 @@ def selftest():
     dst = [a for a in s["accounts"] if "2229" in a["a"]][0]
     assert abs(dst["basis"] - 400.00) < 0.01          # original basis carried
 
+    # 2b. FIFO is by ACQUISITION DATE, not insertion: a transferred-in lot
+    #     older than the destination's own lot is disposed first.
+    txns = [
+        _tx("2026-01-01", "BUY", "TSLA", "AAA1111", 1, 100.00, -100.00),
+        _tx("2026-02-01", "BUY", "TSLA", "BBB2222", 1, 300.00, -300.00),
+        _tx("2026-03-01", "TRANSFER", "TSLA", "AAA1111", -1, hint="BBB22221"),
+        _tx("2026-03-01", "TRANSFER", "TSLA", "BBB2222", 1),
+        _tx("2026-04-01", "SELL", "TSLA", "BBB2222", -1, 350.00, 350.00),
+    ]
+    h = compute_holdings(txns, len(txns), 1)
+    s = h["stocks"][0]
+    # the Jan-acquired $100 lot sells; the Feb $300 lot remains
+    assert abs(s["shares"] - 1) < 1e-9 and abs(s["basis"] - 300.00) < 0.01, s
+
+    # 2c. _txn_key keeps the destination hint: same-day equal-qty transfers
+    #     to different destinations must stay distinct rows.
+    ta = _tx("2026-01-05", "TRANSFER", "TSLA", "AAA1111", -5, hint="BBB22221")
+    tb = _tx("2026-01-05", "TRANSFER", "TSLA", "AAA1111", -5, hint="CCC33331")
+    assert _txn_key(ta) != _txn_key(tb)
+
     # 3. Reinvestment adds fractional shares at |Amount| basis.
     txns = [_tx("2026-03-31", "REINVEST", "PLTU", "X17212229", 0.114, 41.34, -4.71)]
     h = compute_holdings(txns, 1, 1)
     s = h["stocks"][0]
     assert abs(s["shares"] - 0.114) < 1e-9 and abs(s["basis"] - 4.71) < 0.01
 
-    # 4. Oversell (pre-window buy invisible) -> flagged, net count honest.
+    # 4. Oversell (pre-window buy invisible) -> flagged, net count honest,
+    #    and the row is self-describing about what basis/bps cover.
     txns = [
         _tx("2026-02-01", "BUY", "NVDA", "235498151", 1, 100, -100, name="ROTH IRA"),
         _tx("2026-02-10", "SELL", "NVDA", "235498151", -3, 110, 330, name="ROTH IRA"),
@@ -502,7 +615,17 @@ def selftest():
     h = compute_holdings(txns, 2, 1)
     s = h["stocks"][0]
     assert s["shares"] == -2 and s.get("flags"), s
+    assert s.get("uncovered") == 2 and s.get("lotShares") == 0, s
     assert h["warnings"], h["warnings"]
+
+    # 4b. Action classification is anchored — security NAMES containing
+    #     SELL/BUY substrings must not flip the kind.
+    assert classify_action("REINVESTMENT ISHARES RUSSELL 2000 ETF (IWM) (Cash)") == "REINVEST"
+    assert classify_action("TRANSFERRED FROM VS X17-212229-1 BEST BUY CO INC (BBY) (Cash)") == "TRANSFER"
+    assert classify_action("YOU SOLD BEST BUY CO INC (BBY) (Cash)") == "SELL"
+    assert classify_action("YOU BOUGHT ASSIGNED PUTS AS OF 01/30/26 BITMINE (BMNR) (Cash)") == "BUY"
+    assert classify_action("ASSIGNED as of Jan-30-2026 PUT (BMNR) ...") == "ASSIGN"
+    assert classify_action("DIVIDEND RECEIVED NVIDIA CORPORATION COM (NVDA) (Cash)") is None
 
     # 5. Money market excluded by default, included with the flag.
     txns = [_tx("2026-03-31", "REINVEST", "SPAXX", "X83768586", 0.25, 1, -0.25)]
@@ -523,12 +646,14 @@ def selftest():
     assert now["contracts"] == 1 and abs(now["basis"] - 843.67) < 0.01
 
     # 6b. Assignment whose opening short predates the window: no phantom
-    #     contract is fabricated; the symbol is flagged instead.
+    #     contract is fabricated, and the flag surfaces as a warning even
+    #     though the book ends flat.
     txns = [_tx("2026-02-02", "ASSIGN", "-BMNR260130P26", "X17212229", 1)]
     h = compute_holdings(txns, 1, 1)
     opts = {o["t"]: o for o in h["options"]}
     row = opts.get("-BMNR260130P26")
     assert row is None or (abs(row["contracts"]) < 1e-9 and row.get("flags")), row
+    assert any("-BMNR260130P26" in w for w in h["warnings"]), h["warnings"]
 
     # 7. Unmatched transfer-in -> estimated basis from transfer-date value.
     txns = [_tx("2026-04-09", "TRANSFER", "TSLA", "X17212229", 0.146, amount=50.46)]
@@ -550,10 +675,34 @@ def selftest():
             f.write("\n\n" + hdr + "\n" + row + "\n")                 # once
         with open(p2, "w", encoding="utf-8") as f:
             f.write("﻿\n\n" + hdr + "\n" + row + "\n" + row + "\n")  # twice (2 fills)
-        txns, n_unique = union_files([p1, p2])
-        assert n_unique == 1 and len(txns) == 2, (n_unique, len(txns))
+        txns, n_unique, notes = union_files([p1, p2])
+        assert n_unique == 1 and len(txns) == 2 and not notes, (n_unique, len(txns))
         h = compute_holdings(txns, n_unique, 2)
         assert abs(h["stocks"][0]["shares"] - 2) < 1e-9
+
+        # 8b. Ticker/CUSIP flip across exports dedups to ONE fill (real case:
+        #     HON vs 438516106, description gains a trailing ' 1').
+        hon_t = "06/16/2026,\"ROTH IRA\",\"235498151\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",HON,\"HONEYWELL INTERNATIONAL INC COM USD1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
+        hon_c = "06/16/2026,\"ROTH IRA\",\"235498151\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",438516106,\"HONEYWELL INTERNATIONAL INC COM USD1 1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
+        p3 = os.path.join(td, "Accounts_History (2).csv")
+        p4 = os.path.join(td, "Accounts_History (3).csv")
+        with open(p3, "w", encoding="utf-8") as f:
+            f.write("\n\n" + hdr + "\n" + hon_t + "\n")
+        with open(p4, "w", encoding="utf-8") as f:
+            f.write("\n\n" + hdr + "\n" + hon_c + "\n")
+        txns, n_unique, notes = union_files([p3, p4])
+        assert n_unique == 1 and len(txns) == 1, (n_unique, len(txns))
+        assert txns[0]["symbol"] == "HON"
+        h = compute_holdings(txns, n_unique, 2)
+        assert abs(h["stocks"][0]["shares"] - 0.433) < 1e-9
+
+        # 8c. One unreadable file is skipped with a note; the rest still parse.
+        p5 = os.path.join(td, "Accounts_History (4).csv")
+        with open(p5, "wb") as f:
+            f.write(b"\xc9\xc9 not utf-8 \xc9\n")
+        txns, n_unique, notes = union_files([p1, p5])
+        assert n_unique == 1 and len(txns) == 1
+        assert notes and "skipped unreadable" in notes[0], notes
 
     # 9. Consistency: FIFO net equals the signed quantity sum per symbol.
     txns = [
@@ -617,7 +766,10 @@ def main(argv=None):
     if args.symbol:
         want = args.symbol.upper()
         h["stocks"] = [s for s in h["stocks"] if s["t"] == want]
-        h["options"] = [o for o in h["options"] if want in o["t"]]
+        # options match on the exact UNDERLYING (substring would make
+        # --symbol ON pull in -NOW... and -SNOW... contracts)
+        h["options"] = [o for o in h["options"]
+                        if (m := OPTION_SYMBOL_RE.match(o["t"])) and m.group(1) == want]
     if args.json:
         print(json.dumps(h, indent=1))
         return 0

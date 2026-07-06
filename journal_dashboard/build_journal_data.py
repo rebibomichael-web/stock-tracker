@@ -18,7 +18,8 @@ Design rules honored here:
   • EVERY live fetch failure degrades to null fields. This script NEVER exits
     nonzero because the network failed — it prints a WARN line and continues.
   • --offline: zero network; quotes come from a --quotes fixture JSON.
-  • --selftest: pure-function assertions, zero file/network access.
+  • --selftest: pure-function assertions; zero network access (the holdings
+    dedup case round-trips two tiny CSVs through a private temp dir).
 
 Run after a scan:
     python3 build_journal_data.py
@@ -1045,7 +1046,13 @@ def build_journal_locked(args):
         try:
             import holdings as _holdings
             hdir = args.holdings_dir or os.path.dirname(os.path.abspath(csv_path))
-            paths = _holdings.discover_csvs(hdir) or [csv_path]
+            paths = _holdings.discover_csvs(hdir)
+            if not paths:
+                if args.holdings_dir:
+                    warn(f"no Accounts_History*.csv in {hdir} — falling back "
+                         f"to the journal CSV {csv_path}")
+                paths = [csv_path]
+                hdir = os.path.dirname(os.path.abspath(csv_path))
             journal["holdings"] = _holdings.build_from_paths(paths)
             print(f"holdings: {len(journal['holdings']['stocks'])} stocks / "
                   f"{len(journal['holdings']['options'])} option lines from "
@@ -1059,7 +1066,8 @@ def build_journal_locked(args):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Self-test — pure mapping functions only, ZERO file/network access
+#  Self-test — pure mapping functions, zero network access; touches no user
+#  files (holdings case 8 uses only a private temp dir)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def selftest():
@@ -1159,7 +1167,8 @@ def selftest():
     except ValueError:
         pass
 
-    # holdings module (same folder) — pure-function selftest, no file access
+    # holdings module (same folder) — selftest on synthetic rows (its dedup
+    # case round-trips two tiny CSVs through a private temp dir; no network)
     try:
         import holdings as _holdings
     except ImportError:
