@@ -121,6 +121,44 @@ and is **never** written to `journal_history.json`. If no password source is
 configured the adapter prints a WARN and omits the section entirely — journal
 data is never emitted unencrypted.
 
+### Holdings across accounts (inside the locked section)
+
+The unlocked journal now ends with a **Holdings across accounts** table:
+every stock you hold summed over ALL your Fidelity accounts, with the
+**adjusted cost basis of the remaining shares** — e.g. "TSLA · 2 accounts ·
+20.629 sh · $8,637.75 · $413.90/sh", with per-account sub-rows (accounts are
+keyed by account *number* and shown masked, e.g. "Joint ··2229", because two
+different accounts can share the label "Joint WROS - TOD").
+
+It's computed by `holdings.py` (same folder), which:
+
+- scans **every** `Accounts_History*.csv` in the journal CSV's folder (not
+  just the newest download) and dedups overlapping exports — a row counts the
+  max number of times it appears in any single file, so re-exports collapse
+  but two genuinely identical same-day fills survive;
+- tracks buys, sells (FIFO), **dividend reinvestments** (they add shares and
+  raise basis), and **transfers between your accounts** (basis and original
+  acquisition date carry over — transfers are not taxable events);
+- keeps **options separate** (contracts, never mixed into share counts) and
+  excludes the money-market sweep (SPAXX etc.) by default;
+- **never fabricates history**: if the exports don't reach back to a
+  position's first buy, the symbol gets a ⚠ flag ("pre-window activity")
+  instead of a made-up basis. Wash-sale adjustments and splits are not
+  applied (yet).
+
+Standalone use (no dashboard needed):
+
+```bash
+python3 holdings.py --dir ~/Downloads             # table for all symbols
+python3 holdings.py --symbol TSLA                 # one symbol (dir from config)
+python3 holdings.py --json                        # machine-readable
+python3 holdings.py --selftest                    # pure-math assertions
+```
+
+Build flags: `--no-holdings` skips the block; `--holdings-dir DIR` overrides
+which folder is scanned (default: the journal CSV's own folder). The holdings
+data lives **inside the encrypted blob** — same password, nothing plaintext.
+
 ### Journal flags
 
 | Flag | Default | Meaning |

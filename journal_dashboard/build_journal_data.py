@@ -1040,6 +1040,19 @@ def build_journal_locked(args):
         warn(f"journal computation failed: {e} — journal section omitted")
         return None
 
+    # Cross-account holdings (shares + adjusted basis) — degrades to absent.
+    if not args.no_holdings:
+        try:
+            import holdings as _holdings
+            hdir = args.holdings_dir or os.path.dirname(os.path.abspath(csv_path))
+            paths = _holdings.discover_csvs(hdir) or [csv_path]
+            journal["holdings"] = _holdings.build_from_paths(paths)
+            print(f"holdings: {len(journal['holdings']['stocks'])} stocks / "
+                  f"{len(journal['holdings']['options'])} option lines from "
+                  f"{len(paths)} CSV file(s) in {hdir}", flush=True)
+        except Exception as e:
+            warn(f"holdings section unavailable: {e} — omitted")
+
     plaintext = json.dumps(journal, separators=(",", ":"),
                            ensure_ascii=False).encode("utf-8")
     return encrypt_journal(plaintext, password)
@@ -1146,6 +1159,14 @@ def selftest():
     except ValueError:
         pass
 
+    # holdings module (same folder) — pure-function selftest, no file access
+    try:
+        import holdings as _holdings
+    except ImportError:
+        print("note: holdings.py not present — holdings selftest skipped")
+    else:
+        _holdings.selftest()
+
     print("selftest OK — signal cleanup, statusKind, ACT NOW derivations, "
           "watchlist split, rev mapping, journal crypto (test vector + "
           "random round-trip + wrong-password rejection) all pass")
@@ -1183,6 +1204,11 @@ def main(argv=None):
                     help="file containing the journal password")
     ap.add_argument("--no-journal", action="store_true",
                     help="skip the encrypted Trade Journal section")
+    ap.add_argument("--no-holdings", action="store_true",
+                    help="skip the cross-account holdings block")
+    ap.add_argument("--holdings-dir", default=None,
+                    help="directory scanned for Accounts_History*.csv "
+                         "(default: the journal CSV's own folder)")
     args = ap.parse_args(argv)
 
     if args.selftest:
