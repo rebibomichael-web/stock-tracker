@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__actions_list",
+      "mcp__github__issue_read",
+      "mcp__github__list_issues"
+    ]
+  }
+}
