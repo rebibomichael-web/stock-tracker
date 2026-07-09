@@ -56,6 +56,10 @@ PY       = os.path.expanduser(
     os.environ.get("JOURNAL_DASH_PY", "~/stock-tracker-env/bin/python"))
 LOG_PATH = os.path.expanduser(
     os.environ.get("JOURNAL_DASH_LOG", "/tmp/journal_rebuild.log"))
+# Watchdog: a phase that runs longer than this is killed and the run marked
+# failed, so a wedged yfinance can't leave the state stuck "running" forever
+# (which, with single-flight, would disable Refresh on every device).
+PHASE_TIMEOUT = int(os.environ.get("JOURNAL_DASH_TIMEOUT", "1800"))  # 30 min/phase
 
 # The two scripts run from DIR, in this order. Fixed names — NEVER taken from
 # the request (this server is LAN-exposed; no query-driven paths, no arbitrary
@@ -110,17 +114,39 @@ def log_tail(n=12):
         return ""
 
 
-def _rebuild_worker(scan_path, build_path):
-    """Run scan -> build sequentially, combined output to LOG_PATH (truncated).
-    A crash here NEVER takes down the server — it only marks the run failed."""
+def _wait_with_watchdog(p, logf, line):
+    """Wait for p, but kill it (SIGTERM→SIGKILL) if it runs past PHASE_TIMEOUT.
+    Returns the exit code, or a nonzero sentinel on timeout so the run is
+    marked failed instead of hanging 'running' forever."""
     try:
-        with open(LOG_PATH, "w", encoding="utf-8") as logf:
+        return p.wait(timeout=PHASE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        line("\n!!! phase exceeded %ss — terminating" % PHASE_TIMEOUT)
+        logf.flush()
+        p.terminate()
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            try:
+                p.wait(timeout=10)
+            except Exception:
+                pass
+        return p.returncode if p.returncode is not None else 124  # 124 = timed out
+
+
+def _rebuild_worker(scan_path, build_path):
+    """Run scan -> build sequentially, combined output to LOG_PATH (truncated
+    by the POST handler before this thread starts). A crash here NEVER takes
+    down the server — it only marks the run failed."""
+    try:
+        # Append (the POST handler already truncated + wrote a start banner, so
+        # a stale prior [n/m] can't flash on the first poll of the new run).
+        with open(LOG_PATH, "a", encoding="utf-8") as logf:
             def line(s):
                 logf.write(s + "\n")
                 logf.flush()
 
-            line("=== journal rebuild started %s ==="
-                 % dt.datetime.now().isoformat(timespec="seconds"))
             line("DIR=%s  PY=%s" % (DIR, PY))
 
             # phase 1: swing scan (emits [n/total] progress lines)
@@ -129,7 +155,7 @@ def _rebuild_worker(scan_path, build_path):
             logf.flush()
             p = subprocess.Popen([PY, "-u", scan_path], cwd=DIR,
                                  stdout=logf, stderr=subprocess.STDOUT)
-            REBUILD["scan_rc"] = p.wait()
+            REBUILD["scan_rc"] = _wait_with_watchdog(p, logf, line)
             line("\n--- scan exit rc=%s ---" % REBUILD["scan_rc"])
 
             # phase 2: rebuild journal_data.js (only if the scan succeeded)
@@ -139,7 +165,7 @@ def _rebuild_worker(scan_path, build_path):
                 logf.flush()
                 p2 = subprocess.Popen([PY, "-u", build_path], cwd=DIR,
                                       stdout=logf, stderr=subprocess.STDOUT)
-                REBUILD["build_rc"] = p2.wait()
+                REBUILD["build_rc"] = _wait_with_watchdog(p2, logf, line)
                 line("\n--- build exit rc=%s ---" % REBUILD["build_rc"])
             else:
                 line("\n--- build skipped (scan failed) ---")
@@ -160,7 +186,16 @@ def _rebuild_worker(scan_path, build_path):
 
 
 def _start_rebuild(scan_path, build_path):
-    """Reset state and launch the worker. Caller holds REBUILD_LOCK."""
+    """Reset state and launch the worker. Caller holds REBUILD_LOCK.
+    Truncates the log HERE, before this function returns and the POST replies
+    'running', so the first /rebuild-status poll can't read a stale [n/m] left
+    over from the previous run's log."""
+    try:
+        with open(LOG_PATH, "w", encoding="utf-8") as logf:
+            logf.write("=== journal rebuild started %s ===\n"
+                       % dt.datetime.now().isoformat(timespec="seconds"))
+    except Exception:
+        pass  # a log we can't truncate is non-fatal; the worker appends anyway
     REBUILD["scan_rc"] = None
     REBUILD["build_rc"] = None
     REBUILD["phase"] = "scan"
