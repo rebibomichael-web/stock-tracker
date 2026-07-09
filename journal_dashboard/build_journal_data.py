@@ -52,8 +52,9 @@ ORIG_WATCHLIST = [
     "NVDA", "GRNY", "DE", "MU", "NVMI", "SOFI", "HOOD", "NOW",
 ]
 
-ACT_NOW_MIN  = 85   # actNow guard: final_score >= this AND signal is ACT NOW
-TABLE_MIN    = 75   # over75 table: final_score > this
+CARD_MIN     = 75   # trade cards: actionable signal AND final_score > this
+CARD_SIGNALS = ("ACT NOW", "ARB BUY", "BUY")  # tiers that get a card (never WATCH/SELL)
+TABLE_MIN    = 75   # over75 table: final_score > this (all signals)
 HISTORY_KEEP = 30   # most recent dates kept in journal_history.json
 
 # ACT NOW card derivation constants (swing_trader.py:1507-1521, CFG values)
@@ -203,6 +204,7 @@ def act_now_row(r, journal_date, as_of):
     hard_stop = journal_date + dt.timedelta(days=TIME_STOP)
     return {
         "t": r["symbol"],
+        "signal": clean_signal(r.get("signal")),  # card banner shows real tier
         "score": r.get("final_score"),
         "price": round(price, 2),
         "rsi": round(float(r.get("rsi", 0)), 1),
@@ -483,8 +485,9 @@ def build_swing_section(swing, journal_date, as_of):
             if final is None:
                 continue
             sig = clean_signal(r.get("signal"))
-            # actNow: the fired ACT NOW tier (score guard ACT_NOW_MIN).
-            if sig == "ACT NOW" and final >= ACT_NOW_MIN:
+            # cards: every ACTIONABLE tier over CARD_MIN (ACT NOW / ARB BUY /
+            # BUY — WATCH and SELL never get trade cards, table only).
+            if sig in CARD_SIGNALS and final > CARD_MIN:
                 act_now.append(act_now_row(r, journal_date, as_of))
             if final > TABLE_MIN:
                 over75.append(over75_row(r))
@@ -1091,6 +1094,22 @@ def selftest():
     assert row["hold"] == "7-21d"
     assert row["hardStop"] == "Jul 25, 2026", row["hardStop"]   # 2026-07-04 + 21d
     assert row["entry"] == 84.64 and row["theme"] == "Oversold Bounce"
+    assert row["signal"] == "ACT NOW", row["signal"]
+
+    # card selection: actionable tiers over CARD_MIN; WATCH/SELL never card
+    fake_swing = {"results": [
+        {"symbol": "HPE",  "price": 48.88,  "rsi": 60, "atr": 11.59, "final_score": 93, "signal": "🔥 ACT NOW"},
+        {"symbol": "COST", "price": 914.21, "rsi": 35, "atr": 23.37, "final_score": 80, "signal": "⚡ ARB BUY"},
+        {"symbol": "GS",   "price": 1055.0, "rsi": 54, "atr": 5.87,  "final_score": 85, "signal": "▲ BUY"},
+        {"symbol": "IONQ", "price": 44.75,  "rsi": 36, "atr": 3.0,   "final_score": 77, "signal": "▲ BUY"},
+        {"symbol": "LOW",  "price": 212.88, "rsi": 42, "atr": 5.90,  "final_score": 85, "signal": "◌ WATCH"},
+        {"symbol": "SCHW", "price": 101.89, "rsi": 72, "atr": 2.0,   "final_score": 99, "signal": "▼ SELL"},
+        {"symbol": "GM",   "price": 76.15,  "rsi": 41, "atr": 2.0,   "final_score": 75, "signal": "▲ BUY"},  # not > 75
+    ]}
+    cards, table = build_swing_section(fake_swing, dt.date(2026, 7, 9), "22:59")
+    assert [c["t"] for c in cards] == ["HPE", "GS", "COST", "IONQ"], [c["t"] for c in cards]
+    assert [c["signal"] for c in cards] == ["ACT NOW", "BUY", "ARB BUY", "BUY"]
+    assert {r_["t"] for r_ in table} == {"HPE", "COST", "GS", "IONQ", "LOW", "SCHW"}  # >75, all signals
 
     # watchlist split
     recs = [
