@@ -144,7 +144,7 @@ a time, shared across every device pointed at the server.
 | `OUT_PATH` | `~/Desktop/swing_project/journal_data.js` | What the dashboard loads |
 | `HISTORY_PATH` | `~/Desktop/swing_project/journal_history.json` | Multi-day store |
 | `ORIG_WATCHLIST` | your deployed 16 names | Defines the Original/Exceeders split |
-| `ACT_NOW_MIN` | 85 | Min score for an ACT NOW card |
+| `CARD_MIN` | 75 | Min score (exclusive) for a trade card — applies to actionable signals only (`CARD_SIGNALS`: ACT NOW, ARB BUY, BUY; WATCH/SELL never get cards) |
 | `TABLE_MIN` | 75 | Min score (exclusive) for the over-75 table |
 | `HISTORY_KEEP` | 30 | Days kept in history / the date picker |
 

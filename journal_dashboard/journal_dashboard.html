@@ -191,6 +191,9 @@
     .an-flame .an-tk::before, .an-flame .an-score::before, .an-flame .an-px::before { content: "— "; font-weight: normal; }
     .an-flame .rsi::before { content: "— "; font-weight: normal; }
     .an-flame .rsi { margin-left: 5px; }
+    /* banner tone follows the signal tier: ACT NOW red (default), ARB amber, BUY green */
+    .an-card.sig-arb .an-flame { background: linear-gradient(90deg, #a87a00, #c9a227); }
+    .an-card.sig-buy .an-flame { background: linear-gradient(90deg, #1e7a1e, #3f9b3f); }
     .an-buyhdr {
       background: #e7f4e2; color: #1e5c2a; font-weight: bold; font-size: 12.5px;
       border-top: 1px solid #b9d8b0; border-bottom: 1px solid #cfe5c8;
@@ -485,6 +488,9 @@
     .an-card { background: #20242e; border: 1px solid #3d3030; border-left: 3px solid #e0705a; border-radius: 10px; padding: 12px 12px 11px; margin-top: 10px; }
     .an-flame { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .an-flame .fl-pre { display: none; }
+    /* card accent follows the signal tier (left border): ACT NOW flame (default), ARB amber, BUY green */
+    .an-card.sig-arb { border-left-color: #e3b341; }
+    .an-card.sig-buy { border-left-color: #3fb950; }
     .an-tk { font-size: 19px; font-weight: 800; letter-spacing: .3px; }
     .an-score { font-size: 11px; font-weight: 800; color: #ffb199; background: #3a231d; border: 1px solid #5c352a; border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
     .an-px { margin-left: auto; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -679,8 +685,8 @@
   <details class="sec" id="sec-act" open>
     <summary>
       <span class="emo">🔥</span>
-      <span class="t-desk">Swing Trader — ACT NOW</span>
-      <span class="t-mob">Act Now</span>
+      <span class="t-desk">Swing Trader — Act Now &amp; Buys</span>
+      <span class="t-mob">Act Now &amp; Buys</span>
       <span class="cnt mob-only" id="anCnt"></span>
       <span class="sec-sub desk-only" id="anSub"></span>
     </summary>
@@ -1605,22 +1611,26 @@ function loadJournals() {
       : '<span class="small-sub">No full-scan LEAP beat the original top score today.</span>';
   }
 
-  // ── ACT NOW cards ─────────────────────────────────────
+  // ── trade cards (ACT NOW / ARB BUY / BUY over 75) ─────
+  const SIG_GLYPH = { "ACT NOW": "🔥", "ARB BUY": "⚡", "BUY": "▲" };
+  function sigCls(sig) { return sig === "ARB BUY" ? "sig-arb" : sig === "BUY" ? "sig-buy" : "sig-act"; }
+
   function renderActNow(day) {
     const list = (day.swing && day.swing.actNow) || [];
-    $("anSub").textContent = list.length + " signal(s) with Final ≥ 85";
+    $("anSub").textContent = list.length + " actionable signal(s) · ACT NOW / ARB BUY / BUY · Final > 75";
     $("anCnt").textContent = "(" + list.length + ")";
     if (!list.length) { $("anGrid").innerHTML = '<div class="empty">none today</div>'; return; }
-    $("anGrid").innerHTML = list.map(a =>
-      '<div class="an-card">' +
+    $("anGrid").innerHTML = list.map(a => {
+      const sig = a.signal || "ACT NOW";
+      return '<div class="an-card ' + sigCls(sig) + '">' +
         '<div class="an-flame">' +
-          '<span class="fl-pre">🔥 ACT NOW</span>' +
+          '<span class="fl-pre">' + (SIG_GLYPH[sig] || "🔥") + " " + esc(sig) + '</span>' +
           '<span class="an-tk">' + esc(a.t) + "</span>" +
           '<span class="an-score">' + a.score + "/100</span>" +
           '<span class="an-px">$' + fmtPrice(a.price) + '<span class="rsi">RSI ' + a.rsi + "</span></span>" +
         "</div>" +
         '<div class="an-buyhdr desk-only"><span>▲ BUY — ' + esc(a.t) + '</span><span class="asof">As of ' + esc(a.asOf) + "</span></div>" +
-        '<div class="an-meta mob-only">As of <b>' + esc(a.asOf) + "</b> · Hold <b>" + esc(a.hold) + "</b> · Hard stop <b>" + esc(a.hardStop) + "</b></div>" +
+        '<div class="an-meta mob-only"><b>' + (SIG_GLYPH[sig] || "") + " " + esc(sig) + "</b> · As of <b>" + esc(a.asOf) + "</b> · Hold <b>" + esc(a.hold) + "</b> · Hard stop <b>" + esc(a.hardStop) + "</b></div>" +
         '<div class="an-body"><div class="an-rows">' +
           '<div class="an-row entry"><span class="lbl">Entry</span><span class="big">$' + fmtPrice(a.entry) + '</span><span class="sub">max chase $' + fmtPrice(a.maxChase) + "</span></div>" +
           '<div class="an-row stop"><span class="lbl">Stop</span><span class="big">$' + fmtPrice(a.stop) + '</span><span class="sub">' + sPct(a.stopPct, 1) + " · –$" + Math.abs(a.stopPerShare).toFixed(2) + "/sh</span></div>" +
@@ -1635,7 +1645,8 @@ function loadJournals() {
             (a.theme && a.note ? " — " : "") + (a.note ? esc(a.note) : "") + "</div>"
           : "") +
         "</div>" +
-      "</div>").join("");
+      "</div>";
+    }).join("");
   }
 
   // ── positions (simplified compact accordion list) ─────
