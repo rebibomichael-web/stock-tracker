@@ -47,6 +47,82 @@ scan succeeded):
 Each run adds/replaces that day's entry and keeps the last 30 days in
 `journal_history.json`, so the dashboard's date picker fills up over time.
 
+## Refresh / Scan Now (the phone button)
+
+The dashboard has a **🔄 Refresh** button (top-right of the header on desktop,
+in the sticky top bar on the phone). Tapping it re-runs the **full swing scan
+and rebuild on demand** — exactly what the cron line does, but right now —
+so a phone showing a stale morning snapshot can be brought up to date without
+waiting for the desktop app. One tap runs, in order and from the served
+directory:
+
+1. `swing_headless_scan.py`  (the real swing scan; **~1–2 min** live)
+2. `build_journal_data.py`   (regenerates `journal_data.js`)
+
+then the page reloads itself and shows the fresh data. Progress
+(`Scanning… 2/34 · 41s` → `Rebuilding…` → `Updated ✓`) comes straight from the
+scan's `[n/total]` log lines.
+
+### It REQUIRES `journal_dash_server.py`
+
+The button only works when the page is served by **`journal_dash_server.py`**
+(this folder), **not** `python3 -m http.server` and **not** opening the file
+directly. That server is a drop-in replacement for the old no-cache static
+server: it still sends every response `Cache-Control: no-store` (so the phone
+never caches a stale page), and it adds the two endpoints the button calls.
+Opened any other way, the button stays visible but, on tap, explains itself
+(*"Refresh needs the LAN server — open the phone URL (…:8090)"*) instead of
+hanging.
+
+```bash
+cp journal_dash_server.py ~/Desktop/swing_project/
+cd ~/Desktop/swing_project
+python3 journal_dash_server.py         # stdlib-only, runs on system python3
+```
+
+It prints a `http://<lan-ip>:8090/journal_dashboard.html` URL — open that on
+the phone (same wifi).
+
+### Config knobs (env)
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `JOURNAL_DASH_DIR` | `~/Desktop/swing_project` | Directory served **and** the rebuild's working dir (where the two scripts + `journal_data.js` live) |
+| `JOURNAL_DASH_PORT` | `8090` | LAN port |
+| `JOURNAL_DASH_PY` | `~/stock-tracker-env/bin/python` | Python that runs the scripts — the **venv** one, because `build_journal_data.py` needs `yfinance` (the server itself is stdlib-only) |
+| `JOURNAL_DASH_LOG` | `/tmp/journal_rebuild.log` | Combined stdout+stderr of each rebuild (truncated per run) |
+
+### Endpoints
+
+| Route | Method | Returns |
+|---|---|---|
+| `/rebuild` | POST | Starts scan→build in a background thread → `{"ok":true,"state":"running"}`. A second POST while one is running is a no-op → `{"ok":true,"state":"running","note":"already running"}`. Missing script → `{"ok":false,"error":…}` (won't start). |
+| `/rebuild-status` | GET | `{"ok":true,"state":"idle"\|"running"\|"done"\|"failed","elapsed":<sec>,"phase":"scan"\|"build"\|null,"done_n":n,"done_total":m}`. `failed` also includes a `log_tail`. |
+
+Everything else is served as a normal (no-cache) static file. A failed rebuild
+never crashes the server — it just reports `failed`, and the button says
+*"Scan failed — check /tmp/journal_rebuild.log"*.
+
+### Cron: point `@reboot` at the server
+
+Replace whatever `@reboot` line currently starts the plain static server with
+this one, so the phone URL is live (and refreshable) after every boot:
+
+```cron
+@reboot  cd ~/Desktop/swing_project && /usr/bin/python3 journal_dash_server.py >> ~/journal_dash_server.log 2>&1
+```
+
+The **scheduled** rebuild (the `40 16 * * 1-5` line above) is unchanged — the
+button is an *additional*, on-demand path to the same rebuild.
+
+### Why it's manual, not automatic
+
+The scan uses `yfinance`, the **same** data source as your always-running
+desktop app. Hammering it on a timer would double up those requests, so
+Refresh is deliberately **on-demand** (you tap it when you want fresh numbers)
+rather than a background auto-refresh. It's also single-flight: one rebuild at
+a time, shared across every device pointed at the server.
+
 ## What each section shows, and where it comes from
 
 | Section | Source |
