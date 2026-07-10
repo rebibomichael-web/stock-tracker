@@ -123,6 +123,69 @@ Refresh is deliberately **on-demand** (you tap it when you want fresh numbers)
 rather than a background auto-refresh. It's also single-flight: one rebuild at
 a time, shared across every device pointed at the server.
 
+## 🩺 Diagnose (any symbol)
+
+A **🩺 Diagnose** control sits right under the header (a search box + **Go** on
+both skins). Type any symbol and get its **current technical state for the exit
+decision** — a *state-only* snapshot ("overbought, decelerating into
+resistance"), never a probability or forecast. Each call does a **fresh ~1–2s
+live fetch** (no disk cache — this is an exit tool, so staleness would be
+wrong), is **position-aware** (if you hold it, the snapshot adds your lot's
+gain/worst-since-entry/flags), and the result is rendered **verbatim** — the
+module's formatted text *is* the product.
+
+Two ways in:
+
+- **Search box** — type a ticker (e.g. `NEM`), press **Enter** or tap **Go**.
+- **Tap any ticker** — Act Now cards, the over-75 table, both LEAP tables, and
+  position rows all have tappable tickers. On the **heatmap**, a **desktop**
+  tile click opens Diagnose directly; on the **phone**, tapping a tile still
+  shows its detail line and now appends a **· 🩺 diagnose** link to it.
+
+The result opens as a **centered modal** on desktop and a **bottom sheet** on
+the phone (✕ / ESC / backdrop tap to close). A short footer shows
+`cached · Ns ago` on a cache hit plus the universe/source label.
+
+### It runs the CANONICAL `diagnose.py`
+
+Diagnose does **not** copy anything into the served folder. The server shells
+out to the venv python and runs **`~/trading-src/swing/diagnose.py` in place**
+(its canonical home, next to `swing_core`) — so it always tracks the real
+engine. Michael chose this over a copy on purpose. Like the rebuild, it needs
+the **venv python** (`JOURNAL_DASH_PY`) because `diagnose.py` imports `yfinance`
+(and `trade_journal` for the open-position lookup); the server itself stays
+stdlib-only.
+
+### It REQUIRES `journal_dash_server.py`
+
+Same as Refresh: the box/tickers only work when the page is served by
+`journal_dash_server.py`. Over `file://` or with no server, the panel explains
+itself (*"Diagnose needs the LAN server — open the phone URL (…:8090)"*) instead
+of hanging.
+
+### Endpoint
+
+| Route | Method | Returns |
+|---|---|---|
+| `/diagnose?symbol=XYZ` | GET | `{"ok":true,"symbol":"XYZ","cached":false,"result":{…}}` on a fresh run, or `…"cached":true,"age":<sec>…` from cache. The `result` is `diagnose(symbol)`'s dict (its `text` field is the formatted snapshot). A symbol whose data fetch fails still returns `ok:true` with `result.error` set (the module reports its own errors as data). Bad/empty symbol → `{"ok":false,"error":"invalid symbol"}`; timeout → `{"ok":false,"error":"diagnose timed out after Ns"}`; missing `diagnose.py` → `{"ok":false,"error":"diagnose.py not found in <dir> — set JOURNAL_DASH_DIAG_DIR"}`. Always HTTP 200 (no-cache), matching the server's `ok:false` convention. |
+
+The symbol is validated against `^[A-Z0-9.\-]{1,7}$` (uppercased + stripped)
+**before** any subprocess runs, and is passed only as a subprocess **argv
+element** — never a shell string, never a filesystem path. Results are cached
+per symbol for **60s**, and a small semaphore caps concurrent live fetches to 3
+so a tap-happy phone can't stampede yfinance.
+
+### Config knobs (env)
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `JOURNAL_DASH_DIAG_DIR` | `~/trading-src/swing` | Directory containing `diagnose.py` (run in place; also the subprocess cwd) |
+| `JOURNAL_DASH_DIAG_TTL` | `60` | Per-symbol result cache, in seconds |
+| `JOURNAL_DASH_DIAG_TIMEOUT` | `30` | Kill the diagnose subprocess (and report `timed out`) after this many seconds |
+
+The startup banner prints a `diagnose : <dir>  (found | MISSING …)` line so you
+can see at a glance whether the wrapper will work.
+
 ## What each section shows, and where it comes from
 
 | Section | Source |

@@ -16,6 +16,7 @@ then the page reloads itself.
 
     GET  /                (+ any file)  static, served no-cache from DIR
     GET  /rebuild-status  JSON: idle | running | done | failed  (+ progress)
+    GET  /diagnose?symbol=XYZ  JSON: on-demand technical snapshot of one symbol
     POST /rebuild         starts scan -> build in a worker thread (idempotent)
 
 The rebuild runs, from DIR, sequentially:
@@ -30,11 +31,22 @@ Run:
     python3 journal_dash_server.py
 Then open the printed "your phone" URL on any device on the wifi.
 
+The /diagnose endpoint wraps the user's CANONICAL diagnose.py (T1 Symbol
+Diagnostic) — it is NOT copied into DIR; the server shells out to the venv
+python and runs it in place from JOURNAL_DASH_DIAG_DIR (~/trading-src/swing).
+The validated symbol is passed ONLY as a subprocess argv element (never a shell
+string, never a filesystem path); results are cached per-symbol for a short TTL
+and a small semaphore caps concurrent live fetches so a tap-happy phone can't
+stampede yfinance.
+
 Config (all env, sensible defaults):
-    JOURNAL_DASH_DIR   directory served + rebuild cwd  (~/Desktop/swing_project)
-    JOURNAL_DASH_PORT  listen port                     (8090)
-    JOURNAL_DASH_PY    python that runs the scripts     (~/stock-tracker-env/bin/python)
-    JOURNAL_DASH_LOG   combined rebuild log path        (/tmp/journal_rebuild.log)
+    JOURNAL_DASH_DIR          directory served + rebuild cwd  (~/Desktop/swing_project)
+    JOURNAL_DASH_PORT         listen port                     (8090)
+    JOURNAL_DASH_PY           python that runs the scripts    (~/stock-tracker-env/bin/python)
+    JOURNAL_DASH_LOG          combined rebuild log path        (/tmp/journal_rebuild.log)
+    JOURNAL_DASH_DIAG_DIR     dir containing diagnose.py       (~/trading-src/swing)
+    JOURNAL_DASH_DIAG_TTL     per-symbol result cache, seconds (60)
+    JOURNAL_DASH_DIAG_TIMEOUT diagnose subprocess timeout, sec (30)
 """
 import http.server
 import json
@@ -46,7 +58,7 @@ import subprocess
 import threading
 import time
 import datetime as dt
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 # ───────────────────────── config (env-overridable) ─────────────────────────
 DIR      = os.path.abspath(os.path.expanduser(
@@ -66,6 +78,97 @@ PHASE_TIMEOUT = int(os.environ.get("JOURNAL_DASH_TIMEOUT", "1800"))  # 30 min/ph
 # command exec).
 SCAN_SCRIPT  = "swing_headless_scan.py"
 BUILD_SCRIPT = "build_journal_data.py"
+
+# ───────────────────────── diagnose config ─────────────────────────
+# The 🩺 Diagnose feature wraps the user's canonical diagnose.py, run in place
+# from DIAG_DIR (not copied into DIR). Symbols are validated against a tight
+# whitelist before being handed to the subprocess as an argv element.
+DIAG_DIR     = os.path.abspath(os.path.expanduser(
+    os.environ.get("JOURNAL_DASH_DIAG_DIR", "~/trading-src/swing")))
+DIAG_TTL     = int(os.environ.get("JOURNAL_DASH_DIAG_TTL", "60"))       # seconds
+DIAG_TIMEOUT = int(os.environ.get("JOURNAL_DASH_DIAG_TIMEOUT", "30"))   # seconds
+
+# First parameterized input on this LAN-exposed server. Anything not matching is
+# rejected BEFORE any subprocess is spawned. Uppercased + stripped first.
+SYMBOL_RE = re.compile(r"^[A-Z0-9.\-]{1,7}$")
+
+# Tiny stdin-free runner handed to the venv python via -c. It puts DIAG_DIR on
+# sys.path, imports the module's diagnose(), and prints json to stdout. The
+# symbol arrives as a plain argv element (argv[2]) — never interpolated, never
+# a shell string, never a path.
+DIAG_RUNNER = (
+    "import sys, json\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "from diagnose import diagnose\n"
+    "sys.stdout.write(json.dumps(diagnose(sys.argv[2]), default=str))\n"
+)
+
+# Per-symbol result cache {SYM: (ts, result_dict)} + a semaphore that caps how
+# many live diagnose fetches run at once (a burst of taps collapses to <=3
+# concurrent yfinance calls, and repeats within TTL are served from cache).
+DIAG_CACHE = {}
+DIAG_CACHE_LOCK = threading.Lock()
+DIAG_SEM = threading.Semaphore(3)
+
+
+def _stderr_tail(proc, n=240):
+    """Short tail of a subprocess's stderr for error messages (never raises)."""
+    try:
+        err = (proc.stderr or "").strip()
+    except Exception:
+        return ""
+    return err[-n:] if err else ""
+
+
+def _run_diagnose(symbol):
+    """Run the canonical diagnose.py once, in place, in a subprocess.
+    Returns {"ok": True, "result": <dict>} or {"ok": False, "error": <str>}.
+    Never raises."""
+    diag_py = os.path.join(DIAG_DIR, "diagnose.py")
+    if not os.path.isfile(diag_py):
+        return {"ok": False,
+                "error": "diagnose.py not found in %s — set JOURNAL_DASH_DIAG_DIR"
+                         % DIAG_DIR}
+    try:
+        proc = subprocess.run(
+            [PY, "-c", DIAG_RUNNER, DIAG_DIR, symbol],   # symbol = argv element only
+            cwd=DIAG_DIR, capture_output=True, text=True, timeout=DIAG_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "diagnose timed out after %ss" % DIAG_TIMEOUT}
+    except Exception as e:
+        return {"ok": False, "error": "diagnose could not run: %r" % (e,)}
+
+    if proc.returncode != 0:
+        tail = _stderr_tail(proc)
+        return {"ok": False, "error": "diagnose exited %s%s"
+                % (proc.returncode, (" — " + tail) if tail else "")}
+    out = (proc.stdout or "").strip()
+    try:
+        result = json.loads(out)
+    except Exception:
+        tail = _stderr_tail(proc) or (out[:160] if out else "empty output")
+        return {"ok": False, "error": "diagnose gave unreadable output — " + tail}
+    return {"ok": True, "result": result}
+
+
+def diagnose_lookup(symbol):
+    """Cache-then-run lookup for a validated symbol. Returns the JSON payload
+    for GET /diagnose. The whole lookup runs under DIAG_SEM (<=3 concurrent) so
+    a tap-happy phone can't stampede yfinance. Never raises."""
+    with DIAG_SEM:
+        now = time.time()
+        with DIAG_CACHE_LOCK:
+            hit = DIAG_CACHE.get(symbol)
+        if hit and (now - hit[0]) < DIAG_TTL:
+            return {"ok": True, "symbol": symbol, "cached": True,
+                    "age": round(now - hit[0], 1), "result": hit[1]}
+        run = _run_diagnose(symbol)
+        if not run.get("ok"):
+            return run                       # timeout / failure — not cached
+        result = run["result"]
+        with DIAG_CACHE_LOCK:
+            DIAG_CACHE[symbol] = (time.time(), result)
+        return {"ok": True, "symbol": symbol, "cached": False, "result": result}
 
 # ───────────────────────── rebuild state ─────────────────────────
 # One rebuild at a time. The worker thread updates this dict; the request
@@ -229,11 +332,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    # ---- GET: /rebuild-status, else static ----
+    # ---- GET: /rebuild-status, /diagnose, else static ----
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/rebuild-status":
             self._rebuild_status()
+            return
+        if path == "/diagnose":
+            self._diagnose()
             return
         try:
             super().do_GET()          # static serve from DIR
@@ -272,6 +378,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._send_json(200, payload)
         except Exception as e:
             self._send_json(500, {"ok": False, "error": "status error: %r" % (e,)})
+
+    def _diagnose(self):
+        """GET /diagnose?symbol=XYZ — validated, cached, single-flight-capped
+        wrapper around the canonical diagnose.py. Always HTTP 200 (module and
+        validation errors are reported as {"ok": false, ...} data, matching the
+        server's existing convention). Never crashes the server."""
+        try:
+            qs = parse_qs(urlparse(self.path).query)
+            raw = (qs.get("symbol", [""])[0] or "").strip().upper()
+            if not SYMBOL_RE.match(raw):
+                self._send_json(200, {"ok": False, "error": "invalid symbol"})
+                return
+            self._send_json(200, diagnose_lookup(raw))
+        except Exception as e:
+            self._send_json(200, {"ok": False, "error": "diagnose error: %r" % (e,)})
 
     def _rebuild_post(self):
         try:
@@ -323,6 +444,10 @@ def main():
         print("  rebuild  : %s -> %s" % (SCAN_SCRIPT, BUILD_SCRIPT))
         print("  python   : %s" % PY)
         print("  log      : %s" % LOG_PATH)
+        _diag_py = os.path.join(DIAG_DIR, "diagnose.py")
+        print("  diagnose : %s  (%s)" % (DIAG_DIR,
+              "found" if os.path.isfile(_diag_py)
+              else "MISSING diagnose.py — set JOURNAL_DASH_DIAG_DIR"))
         if not os.path.isfile(os.path.join(DIR, "journal_dashboard.html")):
             print("  (note: journal_dashboard.html not found in DIR — copy it in)")
         for name in (SCAN_SCRIPT, BUILD_SCRIPT):
