@@ -310,6 +310,54 @@
     tr.jr-excl .tk-cell { color: #999; }
     .jr-tradeshdr { font-size: 11px; font-weight: bold; color: #444; margin: 10px 0 4px; }
     .jr-foot { margin-top: 8px; font-size: 10.5px; color: #999; font-variant-numeric: tabular-nums; }
+
+    /* ── 🩺 Diagnose control + panel (desktop / Finviz-light) ── */
+    .diag-ctl {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid #d9d9d9; background: #f4f4f4; color: #333;
+      padding: 6px 10px; margin-bottom: 10px;
+    }
+    .diag-ctl-ico { font-size: 14px; line-height: 1; }
+    .diag-ctl-lbl { font-weight: bold; color: #222; font-size: 12px; white-space: nowrap; }
+    .diag-input {
+      border: 1px solid #c9c9c9; border-radius: 2px; padding: 3px 8px;
+      background: #fff; color: #222; width: 210px; text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .diag-input::placeholder { text-transform: none; letter-spacing: normal; color: #999; }
+    .diag-go {
+      font-weight: bold; cursor: pointer; white-space: nowrap;
+      background: #eef6ea; color: #1e5c2a; border: 1px solid #9dc793;
+      padding: 3px 14px; border-radius: 2px;
+    }
+    .diag-go:hover { background: #e0f0da; border-color: #59a14f; }
+    .diag-overlay { background: rgba(0,0,0,.42); }
+    .diag-overlay.open { align-items: center; justify-content: center; }
+    .diag-panel {
+      display: flex; flex-direction: column;
+      width: min(680px, 92vw); max-height: 85vh;
+      background: #fff; border: 1px solid #999; border-radius: 3px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.32);
+    }
+    .diag-head {
+      display: flex; align-items: center; gap: 10px;
+      background: #f4f4f4; border-bottom: 1px solid #d9d9d9; padding: 7px 12px;
+    }
+    .diag-title { font-weight: bold; font-size: 14px; color: #1a1a1a; }
+    .diag-close {
+      margin-left: auto; cursor: pointer; font-weight: bold; color: #444;
+      background: #fff; border: 1px solid #c9c9c9; border-radius: 2px; padding: 2px 9px;
+    }
+    .diag-close:hover { background: #e8eef7; border-color: #4a86c8; }
+    .diag-body { padding: 10px 12px; overflow: auto; }
+    .diag-pre { font-size: 12px; color: #222; line-height: 1.5; }
+    .diag-loading { font-size: 13px; color: #555; padding: 8px 2px; }
+    .diag-error {
+      font-size: 12.5px; color: #7a4b00; background: #fdeecd;
+      border: 1px solid #e0b45f; border-radius: 3px; padding: 10px 12px; line-height: 1.5;
+    }
+    .diag-foot { border-top: 1px solid #eee; padding: 6px 12px; font-size: 11px; color: #888; }
+    .diag-link { color: #1e7a1e; font-weight: bold; }
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -606,9 +654,77 @@
     .jr-tblwrap table { min-width: 620px; }
     .jr-tradeshdr { margin: 12px 2px 0; font-size: 12.5px; font-weight: 700; color: #d7dce6; }
     .jr-foot { margin-top: 10px; font-size: 10.5px; color: #8b93a3; font-variant-numeric: tabular-nums; }
+
+    /* ── 🩺 Diagnose control + panel (mobile / dark compact) ── */
+    .diag-ctl {
+      display: flex; align-items: center; gap: 8px; margin-top: 12px;
+      background: #1b1f27; border: 1px solid #262c36; border-radius: 12px; padding: 8px 10px;
+    }
+    .diag-ctl-ico { font-size: 17px; line-height: 1; }
+    .diag-ctl-lbl { display: none; }   /* keep the row slim on the phone */
+    .diag-input {
+      flex: 1; min-width: 0; min-height: 44px;
+      background: #11141a; color: #e8eaf0; border: 1px solid #2a303c; border-radius: 10px;
+      padding: 0 12px; font-size: 15px; text-transform: uppercase; letter-spacing: .4px;
+      -webkit-appearance: none;
+    }
+    .diag-input::placeholder { text-transform: none; letter-spacing: normal; color: #6b7482; }
+    .diag-go {
+      min-height: 44px; padding: 0 18px; border-radius: 10px; cursor: pointer;
+      background: #10241a; color: #7fe0a0; border: 1px solid #2b5c3f;
+      font-weight: 700; font-size: 14px; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .diag-overlay { background: rgba(0,0,0,.55); }
+    .diag-overlay.open { align-items: flex-end; justify-content: center; }
+    .diag-panel {
+      display: flex; flex-direction: column;
+      width: 100%; max-height: 80vh;
+      background: #1b1f27; color: #e8eaf0;
+      border: 1px solid #262c36; border-top-left-radius: 16px; border-top-right-radius: 16px;
+    }
+    .diag-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border-bottom: 1px solid #232935;
+    }
+    .diag-title { font-weight: 800; font-size: 16px; color: #eef1f7; }
+    .diag-close {
+      margin-left: auto; min-width: 40px; min-height: 40px; cursor: pointer;
+      background: #11141a; color: #c6cdd9; border: 1px solid #2a303c; border-radius: 10px;
+      font-weight: 800; font-size: 15px; -webkit-tap-highlight-color: transparent;
+    }
+    .diag-body { padding: 12px 14px; overflow: auto; -webkit-overflow-scrolling: touch; }
+    .diag-pre { font-size: 12.5px; color: #d7dce6; line-height: 1.55; }
+    .diag-loading { font-size: 14px; color: #9aa3b2; padding: 10px 2px; }
+    .diag-error {
+      font-size: 13px; color: #ffe1ad; background: #403010;
+      border: 1px solid #6d5320; border-radius: 10px; padding: 12px; line-height: 1.5;
+    }
+    .diag-foot { border-top: 1px solid #232935; padding: 9px 14px; font-size: 11px; color: #8b93a3; }
+    .diag-link { color: #7fe0a0; font-weight: 700; white-space: nowrap; }
   }
   @keyframes jrshake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
   .jr-shake { animation: jrshake .35s ease; }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     🩺 DIAGNOSE — shared bits (skin-specific chrome is in the media queries)
+     ═══════════════════════════════════════════════════════════════════ */
+  /* tap-any-ticker affordance */
+  [data-diag] { cursor: pointer; }
+  @media (hover: hover) { [data-diag]:hover { text-decoration: underline; } }
+  /* result overlay: hidden until .open; desktop centers it, mobile bottom-sheets it */
+  .diag-overlay { position: fixed; inset: 0; z-index: 200; display: none; }
+  .diag-overlay.open { display: flex; }
+  .diag-pre {
+    white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @keyframes diagspin { to { transform: rotate(360deg); } }
+  .diag-spin {
+    display: inline-block; width: 15px; height: 15px; vertical-align: -3px; margin-right: 8px;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    animation: diagspin .7s linear infinite;
+  }
 </style>
 </head>
 <body>
@@ -636,6 +752,15 @@
 </header>
 
 <div class="wrap">
+
+  <div class="diag-ctl" role="search">
+    <span class="diag-ctl-ico" aria-hidden="true">🩺</span>
+    <label class="diag-ctl-lbl" for="diagInput">Diagnose</label>
+    <input type="text" id="diagInput" class="diag-input" placeholder="any symbol… e.g. NEM"
+           autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"
+           maxlength="7" aria-label="Diagnose any symbol">
+    <button type="button" id="diagGo" class="diag-go">Go</button>
+  </div>
 
   <div class="ctxline desk-only" id="ctxLine"></div>
   <div class="idxwrap" id="idxWrap"><div class="mstrip" id="mStrip"></div></div>
@@ -730,6 +855,17 @@
 </div>
 
 <div id="tip"></div>
+
+<div id="diagOverlay" class="diag-overlay" role="dialog" aria-modal="true" aria-labelledby="diagTitleTxt">
+  <div class="diag-panel">
+    <div class="diag-head">
+      <span class="diag-title" id="diagTitleTxt">🩺 <span id="diagSym"></span></span>
+      <button type="button" class="diag-close" id="diagClose" aria-label="Close diagnose">✕</button>
+    </div>
+    <div class="diag-body" id="diagBody"></div>
+    <div class="diag-foot" id="diagFoot" style="display:none"></div>
+  </div>
+</div>
 
 <script src="journal_data.js"></script>
 <script id="journal-crypto">
@@ -1581,7 +1717,7 @@ function loadJournals() {
     rows.forEach((r, i) => {
       const tint = tintTop ? (i === 0 ? "tint1" : i === 1 ? "tint2" : i === 2 ? "tint3" : "") : "";
       h += '<tr class="' + tint + '">' +
-        '<td class="tk-cell">' + esc(r.t) + "</td>" +
+        '<td class="tk-cell" data-diag="' + esc(r.t) + '">' + esc(r.t) + "</td>" +
         '<td class="num">$' + fmtPrice(r.price) + "</td>" +
         '<td class="num ' + pctCls(r.chg) + '"><b>' + sPct(r.chg) + "</b></td>" +
         '<td class="num">' + (r.premium != null ? "$" + r.premium.toFixed(2) : "—") +
@@ -1625,7 +1761,7 @@ function loadJournals() {
       return '<div class="an-card ' + sigCls(sig) + '">' +
         '<div class="an-flame">' +
           '<span class="fl-pre">' + (SIG_GLYPH[sig] || "🔥") + " " + esc(sig) + '</span>' +
-          '<span class="an-tk">' + esc(a.t) + "</span>" +
+          '<span class="an-tk" data-diag="' + esc(a.t) + '">' + esc(a.t) + "</span>" +
           '<span class="an-score">' + a.score + "/100</span>" +
           '<span class="an-px">$' + fmtPrice(a.price) + '<span class="rsi">RSI ' + a.rsi + "</span></span>" +
         "</div>" +
@@ -1665,7 +1801,7 @@ function loadJournals() {
       return '<div class="pos-item" data-idx="' + idx + '">' +
         '<button type="button" class="pos-row" aria-expanded="false">' +
           '<span class="pr-l1">' +
-            '<span class="pos-tk">' + esc(p.t) + "</span>" +
+            '<span class="pos-tk" data-diag="' + esc(p.t) + '">' + esc(p.t) + "</span>" +
             '<span class="chip ' + esc(p.statusKind) + '">' + chipIcon(p.statusKind) + esc(p.status) + "</span>" +
             '<span class="pos-days">' + p.days + "d held</span>" +
           "</span>" +
@@ -1719,7 +1855,7 @@ function loadJournals() {
     rows.forEach(r => {
       const cls = r.signal === "ACT NOW" ? "row-act" : r.signal === "BUY" ? "row-buy" : "row-watch";
       h += '<tr class="' + cls + '">' +
-        '<td class="tk-cell">' + esc(r.t) + "</td>" +
+        '<td class="tk-cell" data-diag="' + esc(r.t) + '">' + esc(r.t) + "</td>" +
         '<td class="num">$' + fmtPrice(r.price) + "</td>" +
         '<td class="num">' + (r.rsi != null ? r.rsi.toFixed(1) : "—") + "</td>" +
         '<td class="num">' + r.tech + "</td>" +
@@ -2438,6 +2574,145 @@ function loadJournals() {
       })
       .catch(function () {});                   // no rebuild server: stay idle, silent
   }
+})();
+</script>
+
+<script id="diagnose-control">
+// ── 🩺 Diagnose (any symbol) ──────────────────────────────────────────────────
+// On-demand technical snapshot from the LAN server's GET /diagnose, which wraps
+// the user's canonical diagnose.py. Self-contained (own $ / esc / mq); the only
+// thing it needs from the sections is the data-diag="SYM" attribute the render
+// functions now stamp on tickers. Renders result.text VERBATIM (the module's
+// formatted text is the product). Degrades gracefully over file:// or no server.
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var mq = window.matchMedia("(max-width: 719.98px)");
+
+  var overlay = $("diagOverlay");
+  if (!overlay) return;
+  var panelBody = $("diagBody"), foot = $("diagFoot"), symEl = $("diagSym"),
+      input = $("diagInput");
+  var reqId = 0;   // bumped per open / close so a stale fetch can't paint a closed panel
+
+  var NEED = "Diagnose needs the LAN server — open the phone URL (…:8090). " +
+    "Serve with journal_dash_server.py (not a plain file:// open).";
+
+  // ── panel open/close ──────────────────────────────────
+  function lockScroll(on) {
+    document.documentElement.style.overflow = on ? "hidden" : "";
+    document.body.style.overflow = on ? "hidden" : "";
+  }
+  function closePanel() {
+    reqId++;                          // invalidate any in-flight response
+    overlay.classList.remove("open");
+    lockScroll(false);
+  }
+  function openPanel() {
+    overlay.classList.add("open");
+    lockScroll(true);
+  }
+
+  // ── panel states ──────────────────────────────────────
+  function clearFoot() { foot.textContent = ""; foot.style.display = "none"; }
+  function setLoading(sym) {
+    clearFoot();
+    panelBody.innerHTML = '<div class="diag-loading"><span class="diag-spin"></span>Diagnosing ' +
+      esc(sym) + "… ~2s</div>";
+  }
+  function setError(msg) {
+    clearFoot();
+    panelBody.innerHTML = '<div class="diag-error">' + esc(msg) + "</div>";
+  }
+  function setResult(res, p) {
+    panelBody.innerHTML = '<pre class="diag-pre">' + esc(res.text || "(no text returned)") + "</pre>";
+    var parts = [];
+    if (p.cached) parts.push("cached · " + Math.round(p.age || 0) + "s ago");
+    if (res.source_label) parts.push(res.source_label);
+    if (parts.length) { foot.textContent = parts.join("   ·   "); foot.style.display = ""; }
+    else clearFoot();
+  }
+
+  // ── the fetch ─────────────────────────────────────────
+  function openDiag(sym) {
+    sym = String(sym == null ? "" : sym).trim().toUpperCase();
+    if (!sym) return;
+    symEl.textContent = sym;
+    openPanel();
+    setLoading(sym);
+    var id = ++reqId;
+    if (location.protocol === "file:") { setError(NEED); return; }   // no server behind a file:// open
+    fetch("/diagnose?symbol=" + encodeURIComponent(sym), { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (p) {
+        if (id !== reqId) return;                        // superseded or panel closed
+        if (!p) { setError(NEED); return; }
+        if (!p.ok) { setError(p.error || "diagnose failed"); return; }
+        var res = p.result || {};
+        if (res.error) { setError(res.error); return; }  // module reports its own errors as data
+        setResult(res, p);
+      })
+      .catch(function () { if (id === reqId) setError(NEED); });
+  }
+
+  // ── search box ────────────────────────────────────────
+  $("diagGo").addEventListener("click", function () { openDiag(input.value); input.blur(); });
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); openDiag(input.value); input.blur(); }
+  });
+
+  // ── close: ✕ / backdrop tap / ESC ─────────────────────
+  $("diagClose").addEventListener("click", closePanel);
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) closePanel(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && overlay.classList.contains("open")) closePanel();
+  });
+
+  // ── tap-any-ticker (capture phase) ────────────────────
+  // Capture runs BEFORE the sections' own bubble handlers, so tapping a ticker
+  // that lives inside another control (e.g. a position row's accordion button)
+  // opens diagnose without ALSO toggling that control.
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    var tagged = t.closest && t.closest("[data-diag]");
+    if (tagged) {
+      e.stopPropagation(); e.preventDefault();
+      openDiag(tagged.getAttribute("data-diag"));
+      return;
+    }
+    // Heatmap on DESKTOP: tiles have only a hover tooltip (no click detail of
+    // their own), so a tile click opens diagnose directly. On mobile the tile
+    // tap keeps its existing detail behavior (handled below), untouched.
+    if (!mq.matches) {
+      var tile = t.closest && t.closest(".tile");
+      if (tile) {
+        var tk = tile.querySelector(".tk");
+        if (tk && tk.textContent) { e.stopPropagation(); openDiag(tk.textContent); }
+      }
+    }
+  }, true);
+
+  // Heatmap on MOBILE: the existing tap handler (in the main script) fills
+  // #hmDetail with the tile's detail line; append a "· 🩺 diagnose" link to it,
+  // non-destructively, AFTER that handler runs (this bubble listener is
+  // registered after the main one). The link carries data-diag, so the capture
+  // handler above opens diagnose when it's tapped.
+  document.addEventListener("click", function (e) {
+    if (!mq.matches) return;
+    var tile = e.target.closest && e.target.closest("[data-tipm]");
+    if (!tile) return;
+    var txt = tile.getAttribute("data-tipm") || "";
+    var dash = txt.indexOf(" — ");
+    var sym = dash > 0 ? txt.slice(0, dash) : txt;
+    var det = $("hmDetail");
+    if (det && sym) det.insertAdjacentHTML("beforeend",
+      ' <span class="diag-link" data-diag="' + esc(sym) + '">· 🩺 diagnose</span>');
+  });
 })();
 </script>
 </body>
