@@ -7,8 +7,11 @@
       "mcp__claude-code-remote__add_repo",
       "mcp__claude-code-remote__register_repo_root",
       "mcp__claude-code-remote__list_repos",
-      "Bash(git clone --depth 1 https://github.com/rebibomichael-web/*)",
-      "Bash(git fetch origin *)",
+      "Bash(git clone --depth 1 https://github.com/rebibomichael-web/stock-tracker /workspace/stock-tracker)",
+      "Bash(git clone --depth 1 https://github.com/rebibomichael-web/trading-src /workspace/trading-src)",
+      "Bash(git clone --depth 1 https://github.com/rebibomichael-web/trading-suite /workspace/trading-suite)",
+      "Bash(git clone --depth 1 https://github.com/rebibomichael-web/trading-data /workspace/trading-data)",
+      "Bash(git fetch origin)",
       "Bash(python3 journal_dashboard/build_journal_data.py --selftest)"
     ]
   },

@@ -67,15 +67,22 @@ roadmap item there. Two loosely-coupled subprojects live here:
 ## Related repositories — add at session start
 
 The owner wants every session started from this repo to also have access to the
-sibling repositories. At the start of a session, add them with the `add_repo`
-tool (this note is standing authorization from the owner to do so):
+sibling repositories (this note is standing authorization from the owner for
+`add_repo`; keep this list in sync with `REPOS` in
+`.claude/hooks/session-start.sh`):
 
-- `rebibomichael-web/trading-src`
-- `rebibomichael-web/trading-suite`
-- `rebibomichael-web/trading-data`
+- `rebibomichael-web/trading-src` (private)
+- `rebibomichael-web/trading-suite` (public)
+- `rebibomichael-web/trading-data` (private)
 
-Clone them to `/workspace/<repo>` — trading-src's tests expect the
-trading-data clone at `/workspace/trading-data`.
+In remote sessions, a SessionStart hook reports each sibling's on-disk state
+and prints the bootstrap steps — follow its directive. For EVERY sibling,
+including any the hook already cloned, call `add_repo` and then
+`register_repo_root`: a clone on disk alone loads nothing (no CLAUDE.md/skills,
+no GitHub API scope). The hook itself can only clone the public sibling —
+private repos are cloneable only after `add_repo` grants session scope. Clone
+to `/workspace/<repo>` — trading-src's tests expect the trading-data clone at
+`/workspace/trading-data`.
 
 If an add fails with an authorization error, tell the owner to grant the Claude
 GitHub App access to that repo at https://github.com/apps/claude (Configure →
