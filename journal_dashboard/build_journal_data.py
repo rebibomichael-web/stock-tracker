@@ -719,11 +719,12 @@ def import_swing_stack():
     return swing_core, diagnose
 
 
-def _holdings_lot_groups(opens, tags, tj):
+def _holdings_lot_groups(opens, tags, tj, money_market=frozenset()):
     """Journal FIFO opens -> {underlying: {"swing": [legs], "leap": [legs]}}.
     Excluded-tagged lots are dropped; tickers whose ONLY lots are Excluded
-    are dropped entirely (plan D1). Option lots map to their underlying.
-    Returns (groups, n_excluded_lots)."""
+    are dropped entirely (plan D1). Cash-sweep/money-market symbols are
+    skipped — a 73-day-old SPAXX lot is cash, not a rotting swing trade.
+    Option lots map to their underlying. Returns (groups, n_excluded_lots)."""
     apply_journal_tags(tj, opens, tags)
     groups, n_excl = {}, 0
     for leg in opens:
@@ -733,6 +734,8 @@ def _holdings_lot_groups(opens, tags, tj):
             n_excl += 1
             continue
         raw = (leg.get("ticker") or "").strip().upper()
+        if raw in money_market:
+            continue
         if leg.get("is_option"):
             und = option_underlying(raw)
             if not und:
@@ -867,11 +870,11 @@ def build_holdings(args, journal_date):
         warn(f"holdings: journal CSV unreadable ({e}) — section omitted")
         return None
     tags = load_journal_tags(args.journal_tags_db or tj.DB_PATH)
-    groups, n_excl = _holdings_lot_groups(opens, tags, tj)
 
     # ── Authoritative per-account counts/basis (holdings.py, optional) ──
     hold = None
     hold_dir = args.holdings_dir
+    holdings_mod = None
     try:
         import holdings as holdings_mod
         if not hold_dir:
@@ -889,6 +892,12 @@ def build_holdings(args, journal_date):
         warn(f"holdings: holdings.py engine unavailable ({e}) — "
              f"per-account totals unavailable")
     hold_stocks = {r["t"]: r for r in (hold or {}).get("stocks", [])}
+
+    # Cash sweeps are cash, not positions (holdings.py's own list; frozen
+    # fallback if the engine isn't importable — same symbols, rarely change).
+    money_market = (getattr(holdings_mod, "MONEY_MARKET", None)
+                    or {"SPAXX", "FDRXX", "SPRXX", "FZFXX", "FCASH", "CORE"})
+    groups, n_excl = _holdings_lot_groups(opens, tags, tj, money_market)
 
     # ── Verdict stack (optional) ──
     sc = dg = None
