@@ -261,6 +261,38 @@
     .stale-w { color: #b8860b; cursor: help; }
     .empty { color: #999; font-size: 11.5px; padding: 4px 2px; }
 
+    /* ── Daily Holdings (desktop) ── */
+    .hold-stale { background: #fdeecd; border: 1px solid #e0b45f; color: #7a4b00;
+      font-size: 12px; font-weight: bold; padding: 6px 9px; margin-bottom: 8px; border-radius: 3px; }
+    .hold-triage { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+      margin-bottom: 8px; font-size: 12px; }
+    .ht-lbl { font-weight: bold; color: #555; }
+    .ht-chip { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px;
+      font-weight: bold; border: 1px solid transparent; }
+    .ht-chip.look { background: #f8d7d4; color: #8b1e1e; border-color: #dc9a94; }
+    .ht-chip.fine { background: #d9edd3; color: #1e5c2a; border-color: #9dc793; }
+    .ht-chip.untr { background: #ececec; color: #666; border-color: #cfcfcf; }
+    .hold-badge { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .4px;
+      border-radius: 2px; padding: 1px 5px; margin-left: 5px; vertical-align: 1px; }
+    .hold-badge.swing { background: #dbe9fb; color: #1c4f8b; border: 1px solid #a9c8ec; }
+    .hold-badge.leap  { background: #e9dbfb; color: #5b2d8b; border: 1px solid #c9aeec; }
+    .hold-badge.untr  { background: #f0f0f0; color: #777; border: 1px solid #d5d5d5; }
+    .hv { background: #fafcff; border: 1px solid #dbe6f3; border-radius: 3px;
+      padding: 7px 9px; margin: 6px 0; }
+    .hv-line { font-size: 12px; color: #333; line-height: 1.45; }
+    .hv-line.call { font-weight: bold; }
+    .hv-leap { border-color: #d9c8f0; background: #fbfaff; }
+    .hold-accts { font-size: 11px; color: #777; margin: 4px 0; }
+    .hold-cov { font-size: 11px; color: #7a4b00; background: #fdf6e3; border: 1px dashed #e0b45f;
+      padding: 3px 7px; margin: 4px 0; border-radius: 3px; }
+    .hold-meta { margin-top: 8px; font-size: 10.5px; color: #999; line-height: 1.5; }
+    .lot-flag { font-weight: bold; }
+    .lot-flag.bad { color: #c0392b; }
+    .lot-flag.warn { color: #b8860b; }
+    .lot-flag.ok { color: #1e7a1e; }
+    /* holdings details (verdict + lots table) outgrow the 420px pos clip */
+    #holdList .pos-item.open .pos-detail { max-height: 1600px; }
+
     footer { margin-top: 14px; color: #999; font-size: 11px; text-align: center; }
 
     /* ── Trade Journal (desktop) ── */
@@ -409,6 +441,8 @@
       -webkit-tap-highlight-color: transparent; white-space: nowrap;
     }
     .titlerow .refresh-btn:disabled { opacity: .6; }
+    /* second action button (↻ Markets) sits flush next to the first */
+    .titlerow .refresh-btn + .refresh-btn { margin-left: 8px; }
     .refresh-note {
       margin-top: 8px; font-size: 12px; line-height: 1.4; color: #f3c96b;
       background: #241d0e; border: 1px solid #5a4a22; border-radius: 9px; padding: 8px 11px;
@@ -608,6 +642,37 @@
 
     footer { margin: 20px auto 0; padding: 0 12px 26px; font-size: 10.5px; color: #6b7482; text-align: center; }
 
+    /* ── Daily Holdings (mobile) ── */
+    .hold-stale { background: #403010; border: 1px solid #6d5320; color: #ffe1ad;
+      font-size: 12px; font-weight: 700; padding: 8px 11px; margin: 8px 0; border-radius: 9px; }
+    .hold-triage { display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: baseline;
+      margin: 8px 0; font-size: 12px; }
+    .ht-lbl { font-weight: 700; color: #8b93a3; }
+    .ht-chip { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 11px;
+      font-weight: 700; border: 1px solid transparent; }
+    .ht-chip.look { color: #ffd7d5; background: #4a1f1e; border-color: #7c3230; }
+    .ht-chip.fine { color: #c9f4d9; background: #173425; border-color: #2b5c3f; }
+    .ht-chip.untr { color: #9aa3b2; background: #1c212a; border-color: #2c3340; }
+    .hold-badge { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: .4px;
+      border-radius: 4px; padding: 1px 5px; margin-left: 5px; vertical-align: 1px; }
+    .hold-badge.swing { color: #a9c8ec; background: #16243a; border: 1px solid #2a4a74; }
+    .hold-badge.leap  { color: #c9aeec; background: #251636; border: 1px solid #4a2a74; }
+    .hold-badge.untr  { color: #8b93a3; background: #1c212a; border: 1px solid #2c3340; }
+    .hv { background: #151a23; border: 1px solid #24314a; border-radius: 9px;
+      padding: 8px 10px; margin: 7px 0; }
+    .hv-line { font-size: 12.5px; color: #d7dce6; line-height: 1.5; }
+    .hv-line.call { font-weight: 700; }
+    .hv-leap { border-color: #3a2a54; background: #171523; }
+    .hold-accts { font-size: 11px; color: #8b93a3; margin: 5px 0; }
+    .hold-cov { font-size: 11px; color: #ffe1ad; background: #2b2410; border: 1px dashed #6d5320;
+      padding: 4px 8px; margin: 5px 0; border-radius: 7px; }
+    .hold-meta { margin-top: 9px; font-size: 10.5px; color: #6b7482; line-height: 1.5; }
+    .lot-flag { font-weight: 700; }
+    .lot-flag.bad { color: #ff8280; }
+    .lot-flag.warn { color: #ffce6b; }
+    .lot-flag.ok { color: #5fd38d; }
+    #holdList .pos-item.open .pos-detail { max-height: 1800px; }
+
     /* ── Trade Journal (mobile) ── */
     #sec-journal { --jr-sw:#3fbf77; --jr-lp:#6ea8ff; --jr-pos:#5fd38d; --jr-neg:#ff8280;
       --jr-axis:#333b48; --jr-grid:#232935; --jr-fg:#d7dce6; --jr-muted:#8b93a3; }
@@ -741,9 +806,11 @@
         <span class="daylabel" id="dayLabel"></span>
         <span class="daysession" id="daySession"></span>
         <button type="button" class="refresh-btn js-refresh" title="Re-run the swing scan and rebuild the dashboard (~1-2 min)">🔄 Refresh</button>
+        <button type="button" class="refresh-btn js-mkt-refresh" title="Update just the market strip + VIX/regime line (a few seconds, no re-scan)">↻ Markets</button>
         <span class="refresh-note js-refresh-note" role="status" style="display:none"></span>
       </div>
       <button type="button" class="refresh-btn js-refresh mob-only" title="Re-run the swing scan and rebuild the dashboard (~1-2 min)">🔄 Refresh</button>
+      <button type="button" class="refresh-btn js-mkt-refresh mob-only" title="Update just the market strip + VIX/regime line (a few seconds, no re-scan)">↻</button>
     </div>
     <div class="datechips mob-only" id="dateChips" role="group" aria-label="Journal date"></div>
     <div class="refresh-note js-refresh-note mob-only" role="status" style="display:none"></div>
@@ -816,6 +883,22 @@
       <span class="sec-sub desk-only" id="anSub"></span>
     </summary>
     <div class="sec-body"><div class="an-grid" id="anGrid"></div></div>
+  </details>
+
+  <details class="sec" id="sec-hold" open>
+    <summary>
+      <span class="emo">🗂️</span>
+      <span class="t-desk">Daily Holdings — plain-English read</span>
+      <span class="t-mob">Holdings</span>
+      <span class="cnt mob-only" id="holdCnt"></span>
+      <span class="sec-sub desk-only" id="holdSub"></span>
+    </summary>
+    <div class="sec-body">
+      <div id="holdStale"></div>
+      <div id="holdTriage"></div>
+      <div id="holdList"></div>
+      <div class="hold-meta" id="holdMeta"></div>
+    </div>
   </details>
 
   <details class="sec" id="sec-pos" open>
@@ -1843,6 +1926,203 @@ function loadJournals() {
     }
   });
 
+  // ── Daily Holdings — plain-English read ───────────────
+  // Data contract: day.holdings from build_journal_data.py build_holdings()
+  // (HOLDINGS_DAILY_REPORT_BUILD_PLAN_20260712.md, Phase A). Absent on
+  // pre-Phase-A builds -> the section explains itself instead of breaking.
+  function flagCls(f) {
+    if (f === "STOP" || f === "WATCH" || f === "ROT" || f === "SUSPECT") return "bad";
+    if (f === "WATCH?" || f === "ROT~" || f === "EARN") return "warn";
+    return "ok";
+  }
+  // plain (unsigned) quantity — sNum is for signed deltas, not share counts
+  const qNum = v => v == null ? "—" : String(parseFloat(Number(v).toFixed(4)));
+  function holdBadges(badges) {
+    return (badges || []).map(b =>
+      '<span class="hold-badge ' + (b === "untracked" ? "untr" : esc(b)) + '">' +
+      (b === "swing" ? "SWING" : b === "leap" ? "LEAP" : "UNTRACKED") + "</span>").join("");
+  }
+  function verdictHTML(lines, extraCls) {
+    const body = (lines || []).filter(l => l.indexOf("-- Plain-English") === -1);
+    if (!body.length) return "";
+    return '<div class="hv ' + (extraCls || "") + '">' + body.map(l => {
+      const t = l.replace(/^\s+/, "");
+      return '<div class="hv-line' + (t.indexOf("→") !== -1 ? " call" : "") + '">' + esc(t) + "</div>";
+    }).join("") + "</div>";
+  }
+  function lotRow(l) {
+    const isLeap = l.type === "leap";
+    const flags = (l.flags || []).map(f =>
+      '<span class="lot-flag ' + flagCls(f) + '">' + esc(f) + "</span>").join(" ");
+    return "<tr>" +
+      "<td>" + (isLeap ? "🟣 LEAP" : "🔵 Swing") + (l.short ? " (short)" : "") + "</td>" +
+      '<td class="num">' + esc(String(l.account || "?")) + "</td>" +
+      "<td>" + esc(l.buyDate || "—") + "</td>" +
+      '<td class="num">' + (isLeap ? qNum(l.contracts) + "c" : qNum(l.qty)) + "</td>" +
+      '<td class="num">$' + fmtPrice(l.buyPrice) + "</td>" +
+      '<td class="num ' + pctCls(isLeap ? l.underlyingMovePct : l.gainPct) + '">' +
+        (isLeap
+          ? (l.underlyingMovePct != null ? sPct(l.underlyingMovePct, 1) + " und." : "—")
+          : (l.gainPct != null ? sPct(l.gainPct, 1) : "—")) + "</td>" +
+      '<td class="num">' + (!isLeap && l.worstPct != null ? sPct(l.worstPct, 1) : "—") + "</td>" +
+      '<td class="num">' + (l.daysHeld != null ? l.daysHeld + "d" : "—") + "</td>" +
+      '<td class="num">' + (l.stop != null ? "$" + fmtPrice(l.stop) : "—") + "</td>" +
+      '<td class="num">' + (l.t1 != null ? "$" + fmtPrice(l.t1) : "—") + "</td>" +
+      '<td class="num">' + (l.t2 != null ? "$" + fmtPrice(l.t2) : "—") + "</td>" +
+      "<td>" + (flags || (isLeap ? '<span class="lot-flag ok">thesis-ruled</span>' : "—")) + "</td>" +
+      "</tr>";
+  }
+  function renderHoldings(day) {
+    const h = day.holdings;
+    const stale = $("holdStale"), triage = $("holdTriage"),
+          list = $("holdList"), meta = $("holdMeta");
+    if (!h) {
+      $("holdSub").textContent = "not in this build";
+      $("holdCnt").textContent = "";
+      stale.innerHTML = triage.innerHTML = meta.innerHTML = "";
+      list.innerHTML = '<div class="empty">No holdings data for this date — '
+        + "rebuild with the Phase-A build_journal_data.py.</div>";
+      return;
+    }
+    const s = h.summary, m = h.meta;
+    $("holdSub").textContent = s.tickers + " tickers · ⚠ " + s.needsLook.length
+      + " need a look · ✓ " + s.ridingFine.length + " fine"
+      + (s.untracked.length ? " · " + s.untracked.length + " untracked" : "");
+    $("holdCnt").textContent = "(" + s.tickers + (m.stale ? " · STALE" : "") + ")";
+    stale.innerHTML = m.stale
+      ? '<div class="hold-stale">⚠ ' + esc(m.staleReason || "positions data may be stale") + "</div>"
+      : "";
+    let tri = "";
+    if (s.needsLook.length) {
+      tri += '<span class="ht-lbl">⚠ Needs a look:</span> ' + s.needsLook.map(b =>
+        '<span class="ht-chip look" data-diag="' + esc(b.t) + '">' + esc(b.t)
+        + " — " + esc(b.call) + "</span>").join(" ");
+    }
+    tri += (tri ? " " : "") + '<span class="ht-lbl">✓ Fine:</span> '
+      + (s.ridingFine.length
+          ? s.ridingFine.map(b => '<span class="ht-chip fine" data-diag="' + esc(b.t) + '">'
+              + esc(b.t) + "</span>").join(" ")
+          : "—");
+    if (s.untracked.length) {
+      tri += ' <span class="ht-lbl">Untracked in journal:</span> ' + s.untracked.map(t =>
+        '<span class="ht-chip untr" data-diag="' + esc(t) + '">' + esc(t) + "</span>").join(" ");
+    }
+    const tt = s.totals || {};
+    if (tt.value != null && tt.pl != null) {
+      tri += ' <span class="ht-lbl">· Σ holdings $' + fmtPrice(tt.value)
+        + ' <span class="pct ' + pctCls(tt.plPct) + '">(' + sPct(tt.plPct, 1) + ")</span></span>";
+    }
+    // Excluded-strategy group: hidden as rows by design, totaled here.
+    // Tracks the journal's Excluded tags — no hardcoded ticker list.
+    const ex = s.excluded;
+    if (ex && (ex.tickers || []).length) {
+      tri += ' <span class="ht-lbl">· Excluded (journal):</span> '
+        + ex.tickers.map(t => '<span class="ht-chip untr" data-diag="' + esc(t) + '">' + esc(t) + "</span>").join(" ");
+      if (ex.value != null) {
+        tri += ' <span class="ht-lbl">$' + fmtPrice(ex.value)
+          + (ex.plPct != null
+              ? ' <span class="pct ' + pctCls(ex.plPct) + '">(' + sPct(ex.plPct, 1) + ")</span>"
+              : "")
+          + "</span>";
+      } else if (ex.basis) {
+        tri += ' <span class="ht-lbl">basis $' + fmtPrice(ex.basis) + " (unpriced)</span>";
+      }
+      if ((ex.unpriced || []).length && ex.value != null) {
+        tri += ' <span class="ht-lbl">(' + ex.unpriced.map(esc).join(" ") + " unpriced)</span>";
+      }
+    }
+    triage.innerHTML = tri;
+
+    if (!(h.rows || []).length) {
+      list.innerHTML = '<div class="empty">no open holdings in the journal</div>';
+    } else {
+      list.innerHTML = h.rows.map((r, i) => {
+        const flags = (r.flags || []).map(f =>
+          '<span class="chip ' + (flagCls(f) === "bad" ? "bad" : flagCls(f) === "warn" ? "warn" : "good")
+          + '">' + esc(f) + "</span>").join(" ");
+        const leapLine = r.leap
+          ? '<div class="hv hv-leap"><div class="hv-line call">🟣 ' + esc(r.leap.call) + "</div>"
+            + '<div class="hv-line">' + esc(r.leap.why) + "</div>"
+            + '<div class="hv-line">' + esc(r.leap.watch) + "</div></div>"
+          : "";
+        const accts = (r.accounts || []).length
+          ? '<div class="hold-accts">Accounts: ' + r.accounts.map(a =>
+              esc(a.a) + " — " + qNum(a.shares) + " sh @ $" + fmtPrice(a.bps)).join(" · ") + "</div>"
+          : "";
+        const cov = r.lotCoverage
+          ? '<div class="hold-cov">journal lots cover ' + qNum(r.lotCoverage.lotQty)
+            + " of " + qNum(r.lotCoverage.heldQty) + " shares held — the rest predates "
+            + "the journal window (totals above are authoritative)</div>"
+          : "";
+        const hflags = (r.holdingsFlags || []).length
+          ? '<div class="hold-cov">' + r.holdingsFlags.map(esc).join(" · ") + "</div>"
+          : "";
+        const lots = (r.lots || []).length
+          ? '<div class="tblwrap"><table><thead><tr><th>Lot</th><th>Acct</th><th>Bought</th>'
+            + "<th>Qty</th><th>Entry</th><th>Gain</th><th>Worst</th><th>Held</th>"
+            + "<th>Stop</th><th>T1</th><th>T2</th><th>Flags</th></tr></thead><tbody>"
+            + r.lots.map(lotRow).join("") + "</tbody></table></div>"
+          : "";
+        return '<div class="pos-item" data-idx="' + i + '">' +
+          '<button type="button" class="pos-row" aria-expanded="false">' +
+            '<span class="pr-l1">' +
+              '<span class="pos-tk" data-diag="' + esc(r.t) + '">' + esc(r.t) + "</span>" +
+              holdBadges(r.badges) + (flags ? " " + flags : "") +
+            "</span>" +
+            '<span class="pr-l2">' +
+              '<span class="pos-move">' +
+                (r.price != null
+                  ? "$" + fmtPrice(r.price) + ' <span class="pct ' + pctCls(r.chgPct) + '">('
+                    + sPct(r.chgPct, 1) + ")</span>"
+                  : "price —") + "</span>" +
+              '<span class="pos-mom">' +
+                (r.value != null
+                  ? "$" + fmtPrice(r.value) + ' <span class="pct ' + pctCls(r.plPct) + '">('
+                    + sPct(r.plPct, 1) + ")</span>"
+                  : (r.shares ? qNum(r.shares) + " sh"
+                      : (function () {
+                          var c = (r.lots || []).filter(l => l.type === "leap")
+                                    .reduce((a, l) => a + (l.contracts || 0), 0);
+                          return c ? qNum(c) + " LEAP contract" + (c === 1 ? "" : "s") : "—";
+                        })())) + "</span>" +
+            "</span>" +
+            '<span class="caret" aria-hidden="true"></span>' +
+          "</button>" +
+          '<div class="pos-detail"><div class="pd-in">' +
+            verdictHTML(r.verdict) + leapLine + accts + cov + hflags + lots +
+          "</div></div>" +
+        "</div>";
+      }).join("");
+    }
+    meta.innerHTML = "positions as of <b>" + esc(m.positionsAsOf || "?") + "</b>"
+      + " · journal CSV " + esc(m.journalCsv || "—")
+      + (m.holdingsSource ? " · counts: " + esc(m.holdingsSource) : "")
+      + " · verdicts: " + esc(m.verdictSource || "—")
+      + (m.regime ? " · " + esc(m.regime) : "")
+      + (m.excludedLots ? " · " + m.excludedLots + " Excluded lot(s) hidden" : "")
+      + ((m.nonEquity || []).length
+          ? " · " + m.nonEquity.length + " non-equity instrument(s) hidden ("
+            + m.nonEquity.map(esc).join(", ") + ")"
+          : "");
+  }
+
+  // accordion for holdings rows (same one-open-at-a-time pattern as posList)
+  $("holdList").addEventListener("click", e => {
+    if (e.target.closest("[data-diag]")) return;   // ticker tap -> diagnose, not toggle
+    const row = e.target.closest(".pos-row");
+    if (!row) return;
+    const item = row.closest(".pos-item");
+    const wasOpen = item.classList.contains("open");
+    $("holdList").querySelectorAll(".pos-item.open").forEach(it => {
+      it.classList.remove("open");
+      it.querySelector(".pos-row").setAttribute("aria-expanded", "false");
+    });
+    if (!wasOpen) {
+      item.classList.add("open");
+      row.setAttribute("aria-expanded", "true");
+    }
+  });
+
   // ── over-75 table ─────────────────────────────────────
   function renderOver75(day) {
     const rows = (day.swing && day.swing.over75) || [];
@@ -1879,6 +2159,7 @@ function loadJournals() {
     renderHeatmap(day);
     renderLeaps(day);
     renderActNow(day);
+    renderHoldings(day);
     renderPositions(day);
     renderOver75(day);
   }
@@ -1888,6 +2169,21 @@ function loadJournals() {
     selected = d;
     renderAll();
   }
+
+  // ── partial market refresh (used by the "↻ Markets" control) ─────
+  // Applies a fresh {context, indexes} to the NEWEST journal day only —
+  // older days keep their historical strip — and re-renders it when that
+  // day is on screen. Returns true if the update is visible right now.
+  window.__applyMarket = function (market) {
+    if (!market || typeof market !== "object") return false;
+    const latest = DATES[DATES.length - 1];
+    if (!latest) return false;
+    JOURNALS[latest].market = market;
+    if (selected !== latest) return false;   // applied, viewing an older day
+    renderMarket(JOURNALS[latest]);
+    renderHeader(JOURNALS[latest]);          // mobile ctx line lives in the header
+    return true;
+  };
 
   // ── date controls (desktop arrows + native input) ─────
   function snapToAvailable(v) {
@@ -2574,6 +2870,81 @@ function loadJournals() {
       })
       .catch(function () {});                   // no rebuild server: stay idle, silent
   }
+})();
+</script>
+
+<script id="market-refresh-control">
+// ── ↻ Markets (partial refresh) ──────────────────────────────────────────────
+// Refreshes ONLY the market strip + VIX/regime context line via the LAN
+// server's GET /market-refresh (live index/crypto quotes + context from the
+// last saved scan — no swing scan, no page reload). Self-contained like
+// refresh-control; hands the payload to window.__applyMarket for rendering.
+(function () {
+  "use strict";
+  var buttons = [].slice.call(document.querySelectorAll(".js-mkt-refresh"));
+  var notes = [].slice.call(document.querySelectorAll(".js-refresh-note"));
+  if (!buttons.length) return;
+
+  var idle = buttons.map(function (b) { return b.textContent; });  // per-button (mobile is just "↻")
+  var NEED_SERVER = "Markets refresh needs the LAN server — open the phone URL (…:8090). " +
+    "Serve with journal_dash_server.py (not python3 -m http.server).";
+  var busy = false;
+
+  function setButtons(text, disabled) {
+    buttons.forEach(function (b, i) {
+      b.textContent = text === null ? idle[i] : text;
+      b.disabled = !!disabled;
+    });
+  }
+  function flashNote(text, ms) {
+    notes.forEach(function (n) {
+      n.textContent = text || "";
+      n.style.display = text ? "" : "none";
+    });
+    if (text && ms) {
+      setTimeout(function () {
+        notes.forEach(function (n) {
+          if (n.textContent === text) { n.textContent = ""; n.style.display = "none"; }
+        });
+      }, ms);
+    }
+  }
+  function settle(label) {                     // brief result, then back to idle
+    setButtons(label, true);
+    setTimeout(function () { busy = false; setButtons(null, false); }, 2500);
+  }
+
+  function start() {
+    if (busy) return;
+    if (location.protocol === "file:") {
+      flashNote(NEED_SERVER, 8000);
+      return;
+    }
+    busy = true;
+    setButtons("↻ …", true);
+    fetch("/market-refresh", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (p) {
+        if (!p || !p.ok || !p.market) {
+          settle("↻ failed");
+          flashNote(p && p.error ? ("Markets: " + p.error) : NEED_SERVER, 8000);
+          return;
+        }
+        var visible = window.__applyMarket && window.__applyMarket(p.market);
+        var t = new Date();
+        var hm = t.getHours() + ":" + ("0" + t.getMinutes()).slice(-2);
+        settle("✓ " + hm);
+        if (!visible) {
+          flashNote("Markets updated for today — switch to the newest journal day to see it.", 6000);
+        }
+      })
+      .catch(function () {
+        settle("↻ failed");
+        flashNote("Markets refresh lost contact with the server — is journal_dash_server.py running?", 8000);
+      });
+  }
+
+  buttons.forEach(function (b) { b.addEventListener("click", start); });
 })();
 </script>
 
