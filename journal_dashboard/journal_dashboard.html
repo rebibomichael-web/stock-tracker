@@ -1933,6 +1933,8 @@ function loadJournals() {
   }
   // plain (unsigned) quantity — sNum is for signed deltas, not share counts
   const qNum = v => v == null ? "—" : String(parseFloat(Number(v).toFixed(4)));
+  // money with the sign OUTSIDE the $ (fmtPrice alone renders "$-41.6600")
+  const money = v => v == null ? "—" : (v < 0 ? "-$" : "$") + fmtPrice(Math.abs(v));
   function holdBadges(badges) {
     return (badges || []).map(b =>
       '<span class="hold-badge ' + (b === "untracked" ? "untr" : esc(b)) + '">' +
@@ -2005,7 +2007,7 @@ function loadJournals() {
     }
     const tt = s.totals || {};
     if (tt.value != null && tt.pl != null) {
-      tri += ' <span class="ht-lbl">· value $' + fmtPrice(tt.value)
+      tri += ' <span class="ht-lbl">· value ' + money(tt.value)
         + ' <span class="pct ' + pctCls(tt.plPct) + '">(' + sPct(tt.plPct, 1) + ")</span></span>";
     }
     triage.innerHTML = tri;
@@ -2054,7 +2056,7 @@ function loadJournals() {
                   : "price —") + "</span>" +
               '<span class="pos-mom">' +
                 (r.value != null
-                  ? "$" + fmtPrice(r.value) + ' <span class="pct ' + pctCls(r.plPct) + '">('
+                  ? money(r.value) + ' <span class="pct ' + pctCls(r.plPct) + '">('
                     + sPct(r.plPct, 1) + ")</span>"
                   : (r.shares ? qNum(r.shares) + " sh"
                       : (function () {

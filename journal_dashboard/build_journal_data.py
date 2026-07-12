@@ -1071,8 +1071,22 @@ def build_holdings(args, journal_date):
             "lots": lots,
         })
 
+    # Urgent first: needs-a-look, then riding-fine, then untracked slivers —
+    # alphabetical WITHIN each bucket. (Live 2026-07-12 finding: pure
+    # alphabetical buried the 7 flagged names among 14 fractional leftovers.)
+    _bucket_rank = {"look": 0, "fine": 1, "untracked": 2}
+    rows.sort(key=lambda r: (_bucket_rank.get(r["bucket"], 3), r["t"]))
+
     # ── summary / triage header ──
     def _brief(r):
+        # A LEAP-only row is flagged for its THESIS, so the chip must say
+        # that — the flat-side "SKIP for now" answers a question nobody
+        # asked about a position already held (live 2026-07-12 finding:
+        # BMNR/NFLX showed "SKIP for now" while at-risk).
+        attn = any(f in _ATTN_FLAGS for f in r["flags"])
+        if r["leap"] and ("swing" not in r["badges"]
+                          or (not attn and "AT RISK" in r["leap"]["call"])):
+            return {"t": r["t"], "call": r["leap"]["call"], "badges": r["badges"]}
         call = None
         if r["verdict"]:
             for ln in r["verdict"]:
