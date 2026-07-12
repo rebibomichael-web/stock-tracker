@@ -2076,7 +2076,11 @@ function loadJournals() {
       + (m.holdingsSource ? " · counts: " + esc(m.holdingsSource) : "")
       + " · verdicts: " + esc(m.verdictSource || "—")
       + (m.regime ? " · " + esc(m.regime) : "")
-      + (m.excludedLots ? " · " + m.excludedLots + " Excluded lot(s) hidden" : "");
+      + (m.excludedLots ? " · " + m.excludedLots + " Excluded lot(s) hidden" : "")
+      + ((m.nonEquity || []).length
+          ? " · " + m.nonEquity.length + " non-equity instrument(s) hidden ("
+            + m.nonEquity.map(esc).join(", ") + ")"
+          : "");
   }
 
   // accordion for holdings rows (same one-open-at-a-time pattern as posList)

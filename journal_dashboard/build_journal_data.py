@@ -635,6 +635,18 @@ def build_leaps(leap_recs, date_key, quotes):
 # Same pattern as holdings.py's OPTION_SYMBOL_RE.
 _OPT_UNDERLYING_RE = re.compile(r"^-?([A-Z]{1,6})\d{6}[CP][\d.]+$")
 
+# CUSIP-style "symbols" (e.g. 704916204) — Fidelity exports bonds/treasuries
+# with the CUSIP in the Symbol column. Not tickers: no quote, no verdict.
+# Hidden from the report with a counted note, never silently.
+_NON_EQUITY_RE = re.compile(r"^\d{6}")
+
+
+def is_equity_symbol(sym):
+    """False for CUSIP-style numeric symbols (bonds/notes) and empty
+    strings, True for tickers."""
+    s = (sym or "").strip()
+    return bool(s) and not _NON_EQUITY_RE.match(s)
+
 #  Lot flags that put a ticker in the "needs a look" triage bucket.
 #  Everything from swing_flag except plain HOLD; SUSPECT included (bad data
 #  needs eyes too). A LEAP row also lands here on "THESIS AT RISK".
@@ -734,7 +746,7 @@ def _holdings_lot_groups(opens, tags, tj, money_market=frozenset()):
             n_excl += 1
             continue
         raw = (leg.get("ticker") or "").strip().upper()
-        if raw in money_market:
+        if raw in money_market or not is_equity_symbol(raw):
             continue
         if leg.get("is_option"):
             und = option_underlying(raw)
@@ -923,14 +935,17 @@ def build_holdings(args, journal_date):
 
     # Tickers held per holdings.py but with no journal lots at all (bought
     # pre-window / never tagged). Shown, honestly labeled — not silently
-    # dropped, not silently merged (plan: no silent gaps).
+    # dropped, not silently merged (plan: no silent gaps). CUSIP-style
+    # non-equity rows (bonds/treasuries) are hidden with a counted note.
     only_excl = set()
     for leg in opens:
         t = (leg.get("ticker") or "").strip().upper()
         key = option_underlying(t) if leg.get("is_option") else t
         if key and key not in groups:
             only_excl.add(key)
-    untracked = sorted(set(hold_stocks) - set(groups) - only_excl)
+    non_equity = sorted(t for t in hold_stocks if not is_equity_symbol(t))
+    untracked = sorted(set(hold_stocks) - set(groups) - only_excl
+                       - set(non_equity))
 
     rows = []
     for sym in sorted(set(groups) | set(untracked)):
@@ -1108,6 +1123,7 @@ def build_holdings(args, journal_date):
             "verdictSource": verdict_source,
             "regime": regime_summary,
             "excludedLots": n_excl,
+            "nonEquity": non_equity,
         },
         "summary": {
             "tickers": len(rows),
@@ -1708,6 +1724,12 @@ def selftest():
     _st, _rs = staleness(dt.date(2026, 7, 8), dt.date(2026, 7, 12))
     assert _st is True and "2026-07-08" in _rs
     assert staleness(None, dt.date(2026, 7, 12)) == (True, "no positions data date available")
+
+    # non-equity (CUSIP-style) symbols are hidden, tickers pass through
+    assert is_equity_symbol("PLTR") and is_equity_symbol("BRK.B")
+    assert not is_equity_symbol("704916204")      # the live 2026-07-12 case
+    assert not is_equity_symbol("912797LN4")      # T-bill CUSIP
+    assert is_equity_symbol("SOFI") and not is_equity_symbol("")
 
     # triage bucketing: any non-HOLD lot flag or LEAP thesis at risk -> look
     assert triage_bucket(["HOLD"], None) == "fine"
