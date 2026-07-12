@@ -98,6 +98,7 @@ the phone (same wifi).
 |---|---|---|
 | `/rebuild` | POST | Starts scan→build in a background thread → `{"ok":true,"state":"running"}`. A second POST while one is running is a no-op → `{"ok":true,"state":"running","note":"already running"}`. Missing script → `{"ok":false,"error":…}` (won't start). |
 | `/rebuild-status` | GET | `{"ok":true,"state":"idle"\|"running"\|"done"\|"failed","elapsed":<sec>,"phase":"scan"\|"build"\|null,"done_n":n,"done_total":m}`. `failed` also includes a `log_tail`. |
+| `/market-refresh` | GET | Partial refresh for the **↻ Markets** button: live index/crypto tiles + the VIX/regime context line rebuilt from the *last saved* scan results — no swing scan runs, no page reload. `{"ok":true,"cached":bool,"market":{"context":…,"indexes":[…]}}`; cached ~30 s (`JOURNAL_DASH_MARKET_TTL`), subprocess killed after 60 s (`JOURNAL_DASH_MARKET_TIMEOUT`). Updates the newest journal day only — older days keep their historical strip. |
 
 Everything else is served as a normal (no-cache) static file. A failed rebuild
 never crashes the server — it just reports `failed`, and the button says

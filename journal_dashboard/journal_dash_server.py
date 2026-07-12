@@ -17,6 +17,7 @@ then the page reloads itself.
     GET  /                (+ any file)  static, served no-cache from DIR
     GET  /rebuild-status  JSON: idle | running | done | failed  (+ progress)
     GET  /diagnose?symbol=XYZ  JSON: on-demand technical snapshot of one symbol
+    GET  /market-refresh  JSON: fresh market strip + context line (no scan)
     POST /rebuild         starts scan -> build in a worker thread (idempotent)
 
 The rebuild runs, from DIR, sequentially:
@@ -169,6 +170,87 @@ def diagnose_lookup(symbol):
         with DIAG_CACHE_LOCK:
             DIAG_CACHE[symbol] = (time.time(), result)
         return {"ok": True, "symbol": symbol, "cached": False, "result": result}
+
+# ───────────────────────── market-strip partial refresh ─────────────────────
+# GET /market-refresh — refresh ONLY the market strip (index/crypto tiles) and
+# the header context line ("VIX … — regime …"). Tiles are fetched live; the
+# context is rebuilt from the LAST SAVED swing results file — no scan runs
+# (regime/mult/breadth only change when a real scan writes a new file). Same
+# discipline as /diagnose: a fixed code path in a subprocess of the venv
+# python, nothing request-derived reaches it, short-TTL cache + single-flight
+# so a tap-happy phone can't stampede yfinance.
+MARKET_TTL     = int(os.environ.get("JOURNAL_DASH_MARKET_TTL", "30"))      # seconds
+MARKET_TIMEOUT = int(os.environ.get("JOURNAL_DASH_MARKET_TIMEOUT", "60"))  # seconds
+
+# build_journal_data.warn() prints to stdout, so the runner captures stdout
+# during the fetch/build (re-emitting it on stderr for error tails) and then
+# writes the result JSON to the real stdout alone.
+MARKET_RUNNER = (
+    "import sys, json, io, contextlib\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "buf = io.StringIO()\n"
+    "with contextlib.redirect_stdout(buf):\n"
+    "    import build_journal_data as b\n"
+    "    market = b.build_market(\n"
+    "        b.load_json(b.SWING_JSON_PATH, 'swing scan results'),\n"
+    "        b.fetch_indexes_live())\n"
+    "sys.stderr.write(buf.getvalue())\n"
+    "sys.stdout.write(json.dumps(market))\n"
+)
+
+MARKET_CACHE = {"ts": 0.0, "market": None}
+MARKET_CACHE_LOCK = threading.Lock()
+MARKET_SEM = threading.Semaphore(1)
+
+
+def _run_market_refresh():
+    """Run the market-strip fetch once, in place, in a subprocess. Returns
+    {"ok": True, "market": <dict>} or {"ok": False, "error": <str>}.
+    Never raises."""
+    build_py = os.path.join(DIR, BUILD_SCRIPT)
+    if not os.path.isfile(build_py):
+        return {"ok": False,
+                "error": "%s not found in %s" % (BUILD_SCRIPT, DIR)}
+    try:
+        proc = subprocess.run(
+            [PY, "-c", MARKET_RUNNER, DIR],
+            cwd=DIR, capture_output=True, text=True, timeout=MARKET_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return {"ok": False,
+                "error": "market refresh timed out after %ss" % MARKET_TIMEOUT}
+    except Exception as e:
+        return {"ok": False, "error": "market refresh could not run: %r" % (e,)}
+
+    if proc.returncode != 0:
+        tail = _stderr_tail(proc)
+        return {"ok": False, "error": "market refresh exited %s%s"
+                % (proc.returncode, (" — " + tail) if tail else "")}
+    out = (proc.stdout or "").strip()
+    try:
+        market = json.loads(out)
+    except Exception:
+        tail = _stderr_tail(proc) or (out[:160] if out else "empty output")
+        return {"ok": False, "error": "market refresh gave unreadable output — " + tail}
+    return {"ok": True, "market": market}
+
+
+def market_lookup():
+    """Cache-then-run lookup for GET /market-refresh (mirrors diagnose_lookup).
+    Never raises."""
+    with MARKET_SEM:
+        now = time.time()
+        with MARKET_CACHE_LOCK:
+            ts, cached = MARKET_CACHE["ts"], MARKET_CACHE["market"]
+        if cached is not None and (now - ts) < MARKET_TTL:
+            return {"ok": True, "cached": True, "age": round(now - ts, 1),
+                    "market": cached}
+        run = _run_market_refresh()
+        if not run.get("ok"):
+            return run                       # timeout / failure — not cached
+        with MARKET_CACHE_LOCK:
+            MARKET_CACHE["ts"] = time.time()
+            MARKET_CACHE["market"] = run["market"]
+        return {"ok": True, "cached": False, "market": run["market"]}
 
 # ───────────────────────── rebuild state ─────────────────────────
 # One rebuild at a time. The worker thread updates this dict; the request
@@ -341,6 +423,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/diagnose":
             self._diagnose()
             return
+        if path == "/market-refresh":
+            self._market_refresh()
+            return
         try:
             super().do_GET()          # static serve from DIR
         except (BrokenPipeError, ConnectionResetError):
@@ -393,6 +478,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._send_json(200, diagnose_lookup(raw))
         except Exception as e:
             self._send_json(200, {"ok": False, "error": "diagnose error: %r" % (e,)})
+
+    def _market_refresh(self):
+        """GET /market-refresh — partial refresh: index/crypto tiles live +
+        context line from the last saved scan. No swing scan runs. Always
+        HTTP 200 ({"ok": false, ...} on failure), matching the server's
+        convention. Never crashes the server."""
+        try:
+            self._send_json(200, market_lookup())
+        except Exception as e:
+            self._send_json(200, {"ok": False,
+                                  "error": "market refresh error: %r" % (e,)})
 
     def _rebuild_post(self):
         try:
