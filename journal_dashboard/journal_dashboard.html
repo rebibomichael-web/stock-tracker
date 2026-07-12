@@ -2009,8 +2009,27 @@ function loadJournals() {
     }
     const tt = s.totals || {};
     if (tt.value != null && tt.pl != null) {
-      tri += ' <span class="ht-lbl">· value $' + fmtPrice(tt.value)
+      tri += ' <span class="ht-lbl">· Σ holdings $' + fmtPrice(tt.value)
         + ' <span class="pct ' + pctCls(tt.plPct) + '">(' + sPct(tt.plPct, 1) + ")</span></span>";
+    }
+    // Excluded-strategy group: hidden as rows by design, totaled here.
+    // Tracks the journal's Excluded tags — no hardcoded ticker list.
+    const ex = s.excluded;
+    if (ex && (ex.tickers || []).length) {
+      tri += ' <span class="ht-lbl">· Excluded (journal):</span> '
+        + ex.tickers.map(t => '<span class="ht-chip untr" data-diag="' + esc(t) + '">' + esc(t) + "</span>").join(" ");
+      if (ex.value != null) {
+        tri += ' <span class="ht-lbl">$' + fmtPrice(ex.value)
+          + (ex.plPct != null
+              ? ' <span class="pct ' + pctCls(ex.plPct) + '">(' + sPct(ex.plPct, 1) + ")</span>"
+              : "")
+          + "</span>";
+      } else if (ex.basis) {
+        tri += ' <span class="ht-lbl">basis $' + fmtPrice(ex.basis) + " (unpriced)</span>";
+      }
+      if ((ex.unpriced || []).length && ex.value != null) {
+        tri += ' <span class="ht-lbl">(' + ex.unpriced.map(esc).join(" ") + " unpriced)</span>";
+      }
     }
     triage.innerHTML = tri;
 

@@ -733,17 +733,18 @@ def import_swing_stack():
 
 def _holdings_lot_groups(opens, tags, tj, money_market=frozenset()):
     """Journal FIFO opens -> {underlying: {"swing": [legs], "leap": [legs]}}.
-    Excluded-tagged lots are dropped; tickers whose ONLY lots are Excluded
-    are dropped entirely (plan D1). Cash-sweep/money-market symbols are
-    skipped — a 73-day-old SPAXX lot is cash, not a rotting swing trade.
-    Option lots map to their underlying. Returns (groups, n_excluded_lots)."""
+    Excluded-tagged lots stay out of the groups (no rows/alerts for them —
+    plan D1) but are returned so the summary can total them. Cash-sweep/
+    money-market symbols are skipped — a 73-day-old SPAXX lot is cash, not a
+    rotting swing trade. Option lots map to their underlying. Returns
+    (groups, excluded_legs)."""
     apply_journal_tags(tj, opens, tags)
-    groups, n_excl = {}, 0
+    groups, excl_legs = {}, []
     for leg in opens:
         if not leg.get("is_open", True):
             continue
         if leg.get("method") == "Excluded":
-            n_excl += 1
+            excl_legs.append(leg)
             continue
         raw = (leg.get("ticker") or "").strip().upper()
         if raw in money_market or not is_equity_symbol(raw):
@@ -757,7 +758,62 @@ def _holdings_lot_groups(opens, tags, tj, money_market=frozenset()):
             groups.setdefault(und, {"swing": [], "leap": []})["leap"].append(leg)
         else:
             groups.setdefault(raw, {"swing": [], "leap": []})["swing"].append(leg)
-    return groups, n_excl
+    return groups, excl_legs
+
+
+def _excluded_group(excl_legs, hold_stocks, quotes, mixed=frozenset()):
+    """All open journal lots tagged Excluded -> one group total for the
+    summary line ("what are my long-term/excluded holdings worth"). They
+    stay hidden as rows (plan D1) — this is a total only, so the group
+    tracks the journal's Excluded tags automatically, no hardcoded list.
+
+    shares/basis prefer holdings.py's authoritative per-ticker numbers when
+    ALL of a ticker's lots are Excluded (matches the row logic; catches
+    pre-window buys); a ticker with mixed strategies uses its Excluded leg
+    sums only, so the swing/LEAP part isn't double-counted. value = live
+    quote x shares; tickers with option lots or no usable quote go in
+    'unpriced' and stay out of value/P&L (same convention as the main
+    totals). Returns None when nothing is tagged Excluded."""
+    if not excl_legs:
+        return None
+    per = {}
+    for leg in excl_legs:
+        raw = (leg.get("ticker") or "").strip().upper()
+        und = option_underlying(raw) if leg.get("is_option") else raw
+        if not und:
+            warn(f"holdings: can't extract underlying from excluded option "
+                 f"symbol {raw!r} — lot skipped")
+            continue
+        d = per.setdefault(und, {"qty": 0.0, "basis": 0.0, "opt": False})
+        d["basis"] += float(leg.get("buy_cost") or 0)
+        if leg.get("is_option"):
+            d["opt"] = True
+        else:
+            d["qty"] += float(leg.get("qty") or 0)
+    if not per:
+        return None
+    basis = value = priced_basis = 0.0
+    unpriced = []
+    for t in sorted(per):
+        d = per[t]
+        shares, tb = d["qty"], d["basis"]
+        hrow = (hold_stocks or {}).get(t)
+        if hrow and t not in mixed:
+            shares = hrow.get("shares") or shares
+            tb = hrow.get("basis") or tb
+        basis += tb
+        price = ((quotes or {}).get(t) or {}).get("price")
+        if price is not None and shares and not d["opt"]:
+            value += price * shares
+            priced_basis += tb
+        else:
+            unpriced.append(t)
+    value = round(value, 2) if value else None
+    pl = round(value - priced_basis, 2) if value is not None else None
+    pl_pct = (round(pl / priced_basis * 100, 2)
+              if pl is not None and priced_basis else None)
+    return {"tickers": sorted(per), "basis": round(basis, 2), "value": value,
+            "pl": pl, "plPct": pl_pct, "unpriced": unpriced}
 
 
 def _trend_label(e9, e21, ema50):
@@ -853,12 +909,13 @@ def triage_bucket(lot_flags, leap_call):
     return "fine"
 
 
-def build_holdings(args, journal_date):
+def build_holdings(args, journal_date, quotes=None):
     """The Daily Holdings section, or None (with WARNs) if the journal
     itself can't be read. Every sub-source degrades independently:
     holdings.py missing -> no authoritative totals; swing stack missing ->
     no verdicts/levels; offline -> no prices/flags. Data that IS available
-    always renders (plan §4)."""
+    always renders (plan §4). quotes (the heatmap's fetch) prices the
+    Excluded-group total; without it that total is basis-only."""
     # ── Journal opens + strategy tags (required core) ──
     try:
         tj = import_trade_journal()
@@ -909,7 +966,10 @@ def build_holdings(args, journal_date):
     # fallback if the engine isn't importable — same symbols, rarely change).
     money_market = (getattr(holdings_mod, "MONEY_MARKET", None)
                     or {"SPAXX", "FDRXX", "SPRXX", "FZFXX", "FCASH", "CORE"})
-    groups, n_excl = _holdings_lot_groups(opens, tags, tj, money_market)
+    groups, excl_legs = _holdings_lot_groups(opens, tags, tj, money_market)
+    n_excl = len(excl_legs)
+    excluded_grp = _excluded_group(excl_legs, hold_stocks, quotes,
+                                   mixed=frozenset(groups))
 
     # ── Verdict stack (optional) ──
     sc = dg = None
@@ -1132,6 +1192,7 @@ def build_holdings(args, journal_date):
             "untracked": [r["t"] for r in untr],
             "totals": {"basis": tot_basis, "value": tot_value or None,
                        "pl": tot_pl, "plPct": tot_pl_pct},
+            "excluded": excluded_grp,
         },
         "rows": rows,
     }
@@ -1739,11 +1800,31 @@ def selftest():
     assert triage_bucket([], "THESIS AT RISK") == "look"
     assert triage_bucket(["ROT~"], "THESIS INTACT") == "look"
 
+    # Excluded-group total: journal-tag driven, no hardcoded list
+    _legs = [
+        {"ticker": "TSLA", "qty": 2.0, "buy_cost": 500.0},           # excluded-only, in holdings.py
+        {"ticker": "SSYS", "qty": 10.0, "buy_cost": 150.0},          # excluded-only, no hrow
+        {"ticker": "ORCL", "qty": 1.0, "buy_cost": 140.0},           # mixed -> leg sums only
+        {"ticker": "NFLX260116C500", "buy_cost": 300.0, "is_option": True},
+    ]
+    _hold = {"TSLA": {"shares": 3.0, "basis": 700.0},                # pre-window buy included
+             "ORCL": {"shares": 9.0, "basis": 1300.0}}               # must NOT be used (mixed)
+    _q = {"TSLA": {"price": 400.0}, "SSYS": {"price": 12.0}, "ORCL": {"price": 140.0}}
+    _g = _excluded_group(_legs, _hold, _q, mixed=frozenset({"ORCL"}))
+    assert _g["tickers"] == ["NFLX", "ORCL", "SSYS", "TSLA"]
+    assert _g["basis"] == 700.0 + 150.0 + 140.0 + 300.0              # hrow, legs, legs, option
+    assert _g["value"] == 3.0 * 400.0 + 10.0 * 12.0 + 1.0 * 140.0    # option lot unpriced
+    assert _g["unpriced"] == ["NFLX"]
+    assert _g["pl"] == round(_g["value"] - (700.0 + 150.0 + 140.0), 2)
+    assert _excluded_group([], _hold, _q) is None
+    _g2 = _excluded_group([{"ticker": "TSLA", "qty": 2.0, "buy_cost": 500.0}], {}, {})
+    assert _g2["value"] is None and _g2["unpriced"] == ["TSLA"] and _g2["basis"] == 500.0
+
     print("selftest OK — signal cleanup, statusKind, ACT NOW derivations, "
           "watchlist split, rev mapping, journal crypto (test vector + "
           "random round-trip + wrong-password rejection), holdings helpers "
           "(underlying extraction, entry levels, period/anchor, staleness, "
-          "triage) all pass")
+          "triage, excluded-group totals) all pass")
     return 0
 
 
@@ -1847,7 +1928,7 @@ def main(argv=None):
     holdings_sec = None
     if not args.no_holdings:
         try:
-            holdings_sec = build_holdings(args, journal_date)
+            holdings_sec = build_holdings(args, journal_date, quotes)
         except Exception as e:
             warn(f"holdings section failed ({e}) — omitted; everything else "
                  f"still builds")
