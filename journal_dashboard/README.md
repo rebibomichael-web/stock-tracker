@@ -195,6 +195,7 @@ can see at a glance whether the wrapper will work.
 | **Over-75 table** | All swing results with final score > 75 (tech = raw_buy, bt = backtest adj, arb = arb z-score). "Opinion" is "—" because Barchart isn't scraped headless. |
 | **Positions** (WATCH/ROT/HOLD flags + the 4 checks) | `open_positions_export.csv` ("Swing Trader" rows, lots aggregated per ticker with cost-weighted entry) + live prices; flags come from `swing_flag.classify` — same −8% worst-since-entry cliff and 22-day ROT rules as `swing_flag.py`. |
 | **Heatmap** | ALL tickers in the CSV. Green/red = live daily change. "Excluded strategy" tickers get their own block; a ticker with both strategies counts as active. Tiles show the day's LEAP score when one exists. |
+| **Daily Holdings** (plain-English verdict per held ticker) | Journal opens (`parse_fidelity_csv` + tags DB) × `holdings.py` (per-account counts/adjusted basis from `Accounts_History*.csv` + `Portfolio_Positions*.csv`) × `diagnose.py` (verdict + LEAP thesis read — imported, never copied). Excluded-tagged lots are dropped; LEAP options appear under their **underlying**; each ticker shows once with per-account/per-lot rows underneath (entry-anchored stop/T1/T2 from the buy-date ATR). Header stamps positions-data freshness and goes loud when stale. |
 | **LEAPs** (Original watchlist vs Exceeders) | `~/.michael_leap_recommendations.json`, that day's records. Original = top 3 from your 16-name watchlist; Exceeders = any full-universe name that out-scored the watchlist's best. ⚠ next to a premium = stale-premium guard fired. |
 
 ## Config knobs (top of `build_journal_data.py`)
@@ -270,6 +271,8 @@ data is never emitted unencrypted.
 | `--journal-password` | — | Password on the command line (prefer the key file — argv is visible in `ps`) |
 | `--journal-password-file` | — | Read password from this file |
 | `--no-journal` | off | Skip the journal section entirely |
+| `--holdings-dir` | journal CSV's folder | Folder holding `Accounts_History*.csv` / `Portfolio_Positions*.csv` for per-account totals |
+| `--no-holdings` | off | Skip the Daily Holdings section |
 
 The adapter imports your real `trade_journal.py` (looked up next to the
 script, then `~/Downloads`, then `~/trading-src/journal`) and reuses its

@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sqlite3
 import struct
 import sys
@@ -619,6 +620,499 @@ def build_leaps(leap_recs, date_key, quotes):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Daily Holdings Report — HOLDINGS_DAILY_REPORT_BUILD_PLAN_20260712.md
+#  Phase A. Composes three existing engines (never re-derives):
+#    holdings.py            -> per-(account,ticker) counts + adjusted basis
+#    trade_journal + tags   -> per-lot strategy (Swing/LEAP/Excluded),
+#                              buy dates, option lots (FIFO opens)
+#    diagnose.py            -> the plain-English verdict + LEAP thesis read
+#                              (single copy; NO embedded fallback — if it
+#                              isn't importable the verdict is omitted with
+#                              a visible reason, never re-implemented here)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Fidelity/OCC-ish option symbol, e.g. "-PLTR260116C130" -> underlying "PLTR".
+# Same pattern as holdings.py's OPTION_SYMBOL_RE.
+_OPT_UNDERLYING_RE = re.compile(r"^-?([A-Z]{1,6})\d{6}[CP][\d.]+$")
+
+#  Lot flags that put a ticker in the "needs a look" triage bucket.
+#  Everything from swing_flag except plain HOLD; SUSPECT included (bad data
+#  needs eyes too). A LEAP row also lands here on "THESIS AT RISK".
+_ATTN_FLAGS = {"STOP", "WATCH", "WATCH?", "ROT", "ROT~", "SUSPECT", "EARN"}
+
+
+def option_underlying(sym):
+    """Underlying ticker from a Fidelity option symbol, else None."""
+    m = _OPT_UNDERLYING_RE.match((sym or "").strip().upper())
+    return m.group(1) if m else None
+
+
+def entry_levels(buy_price, atr_entry):
+    """Entry-anchored trade levels (plan D4): stop/T1/T2 fixed at entry from
+    the entry date's ATR — same multiples as the fire card (STOP_M/T1_M/T2_M).
+    Returns (stop, t1, t2) or (None, None, None)."""
+    if buy_price is None or not atr_entry or atr_entry <= 0:
+        return None, None, None
+    return (round(buy_price - STOP_M * atr_entry, 2),
+            round(buy_price + T1_M * atr_entry, 2),
+            round(buy_price + T2_M * atr_entry, 2))
+
+
+def period_for_lots(oldest_buy_date, today):
+    """yfinance period long enough to cover the oldest lot's entry (plan §6),
+    with headroom so the ATR anchor has bars before it."""
+    if oldest_buy_date is None:
+        return "1y"
+    days = (today - oldest_buy_date).days
+    if days <= 300:
+        return "1y"
+    if days <= 660:
+        return "2y"
+    if days <= 1750:
+        return "5y"
+    return "max"
+
+
+def nearest_preceding_idx(sorted_dates, target):
+    """Index of the latest date <= target in an ascending list, else None.
+    Pure (bisect) so the ATR-anchor rule is selftest-able without pandas."""
+    import bisect
+    i = bisect.bisect_right(sorted_dates, target)
+    return i - 1 if i > 0 else None
+
+
+def last_trading_day(today):
+    """Most recent weekday on or before today. Weekend-aware only — market
+    holidays are not modelled, so a holiday Monday reads one day early
+    (conservative: flags MORE staleness, never less)."""
+    d = today
+    while d.weekday() >= 5:
+        d -= dt.timedelta(days=1)
+    return d
+
+
+def staleness(positions_asof_date, today):
+    """(stale, reason). Stale when the newest positions data predates the
+    last trading day (plan §7 — the HON-phantom lesson)."""
+    if positions_asof_date is None:
+        return True, "no positions data date available"
+    ltd = last_trading_day(today)
+    if positions_asof_date < ltd:
+        return True, (f"positions data is from {positions_asof_date.isoformat()} "
+                      f"but the last trading day is {ltd.isoformat()} — "
+                      f"re-download the Fidelity CSV / re-export the journal")
+    return False, None
+
+
+def import_swing_stack():
+    """Headless import of swing_core + diagnose (verdict single-copy).
+    sys.path candidates: this script's dir, ~/Desktop/swing_project,
+    ~/trading-src/swing. Raises on failure (caller warns + degrades)."""
+    for cand in (_SCRIPT_DIR,
+                 os.path.expanduser("~/Desktop/swing_project"),
+                 os.path.expanduser("~/trading-src/swing")):
+        if os.path.isdir(cand) and cand not in sys.path:
+            sys.path.append(cand)
+    _prepare_gui_stubs()          # diagnose imports trade_journal (GUI-free)
+    import swing_core
+    import diagnose
+    return swing_core, diagnose
+
+
+def _holdings_lot_groups(opens, tags, tj):
+    """Journal FIFO opens -> {underlying: {"swing": [legs], "leap": [legs]}}.
+    Excluded-tagged lots are dropped; tickers whose ONLY lots are Excluded
+    are dropped entirely (plan D1). Option lots map to their underlying.
+    Returns (groups, n_excluded_lots)."""
+    apply_journal_tags(tj, opens, tags)
+    groups, n_excl = {}, 0
+    for leg in opens:
+        if not leg.get("is_open", True):
+            continue
+        if leg.get("method") == "Excluded":
+            n_excl += 1
+            continue
+        raw = (leg.get("ticker") or "").strip().upper()
+        if leg.get("is_option"):
+            und = option_underlying(raw)
+            if not und:
+                warn(f"holdings: can't extract underlying from option "
+                     f"symbol {raw!r} — lot skipped")
+                continue
+            groups.setdefault(und, {"swing": [], "leap": []})["leap"].append(leg)
+        else:
+            groups.setdefault(raw, {"swing": [], "leap": []})["swing"].append(leg)
+    return groups, n_excl
+
+
+def _trend_label(e9, e21, ema50):
+    # Same convention as diagnose.py's trend_lbl (kept in step by the
+    # holdings selftest fixture, not by copy-paste of thresholds).
+    if e9 > e21 > ema50 > 0:
+        return "aligned bullish (9>21>50)"
+    if 0 < e9 < e21 < ema50:
+        return "aligned bearish (9<21<50)"
+    return "mixed / no clean alignment"
+
+
+def _atr_at(df, buy_date):
+    """ATR on the nearest bar at/preceding buy_date, else None."""
+    try:
+        idx = df.index.tz_localize(None) if getattr(df.index, "tz", None) else df.index
+        dates = [d.date() for d in idx]
+        i = nearest_preceding_idx(dates, buy_date)
+        if i is None:
+            return None
+        v = float(df["ATR"].iloc[i])
+        return v if v > 0 else None
+    except Exception:
+        return None
+
+
+def _close_at(df, buy_date):
+    """Close on the nearest bar at/preceding buy_date, else None."""
+    try:
+        idx = df.index.tz_localize(None) if getattr(df.index, "tz", None) else df.index
+        dates = [d.date() for d in idx]
+        i = nearest_preceding_idx(dates, buy_date)
+        return float(df["Close"].iloc[i]) if i is not None else None
+    except Exception:
+        return None
+
+
+def _swing_lot_row(pos, leg, df):
+    """One swing-stock lot row from diagnose._enrich_position output."""
+    buy_date = leg["buy_date"].date() if hasattr(leg["buy_date"], "date") else leg["buy_date"]
+    atr_e = _atr_at(df, buy_date) if df is not None else None
+    stop, t1, t2 = entry_levels(pos["buy_price"], atr_e)
+    return {
+        "type": "swing",
+        "account": str(leg.get("account", "?")),
+        "buyDate": pos["buy_date"],
+        "qty": round(pos["qty"], 4),
+        "buyPrice": round(pos["buy_price"], 2),
+        "basis": round(leg.get("buy_cost") or pos["qty"] * pos["buy_price"], 2),
+        "gainPct": round(pos["gain_pct"], 2),
+        "worstPct": round(pos["underwater_pct"], 2),
+        "daysHeld": pos["days_held"],
+        "timeStop": pos["time_stop_days"],
+        "flags": pos["flags"],
+        "flagReason": pos["flag_reason"],
+        "stop": stop, "t1": t1, "t2": t2,
+        "atrEntry": round(atr_e, 3) if atr_e else None,
+        "anchor": "ok" if atr_e else "unavailable",
+        "short": bool(leg.get("is_short")),
+    }
+
+
+def _leap_lot_row(leg, df, price):
+    """One LEAP option lot row. Mark = underlying move since entry (plan
+    deferred-decision #2 fallback; tracker-history marks are a follow-up)."""
+    bd = leg["buy_date"].date() if hasattr(leg["buy_date"], "date") else leg["buy_date"]
+    und_entry = _close_at(df, bd) if df is not None else None
+    und_move = (round((price - und_entry) / und_entry * 100, 2)
+                if price is not None and und_entry else None)
+    return {
+        "type": "leap",
+        "account": str(leg.get("account", "?")),
+        "buyDate": bd.isoformat(),
+        "contracts": round(float(leg.get("qty", 0)), 4),
+        "buyPrice": round(float(leg.get("buy_price", 0)), 2),
+        "basis": round(float(leg.get("buy_cost") or 0), 2),
+        "daysHeld": int(leg.get("hold_days", 0)),
+        "optionSymbol": (leg.get("ticker") or "").strip(),
+        "label": (leg.get("description") or "")[:44],
+        "underlyingEntry": round(und_entry, 2) if und_entry else None,
+        "underlyingMovePct": und_move,
+        "short": bool(leg.get("is_short")),
+    }
+
+
+def triage_bucket(lot_flags, leap_call):
+    """'look' | 'fine' — any attention flag on any lot, or a LEAP thesis at
+    risk, needs eyes; everything else is riding fine."""
+    if any(f in _ATTN_FLAGS for f in lot_flags):
+        return "look"
+    if leap_call and "AT RISK" in leap_call:
+        return "look"
+    return "fine"
+
+
+def build_holdings(args, journal_date):
+    """The Daily Holdings section, or None (with WARNs) if the journal
+    itself can't be read. Every sub-source degrades independently:
+    holdings.py missing -> no authoritative totals; swing stack missing ->
+    no verdicts/levels; offline -> no prices/flags. Data that IS available
+    always renders (plan §4)."""
+    # ── Journal opens + strategy tags (required core) ──
+    try:
+        tj = import_trade_journal()
+    except Exception as e:
+        warn(f"holdings: trade_journal.py not importable ({e}) — section omitted")
+        return None
+    csv_path = args.journal_csv
+    if not csv_path:
+        try:
+            cfg = tj.load_config()
+            csv_path = (cfg or {}).get("last_csv_path")
+        except Exception:
+            csv_path = None
+    if not csv_path or not os.path.isfile(csv_path):
+        warn("holdings: no journal CSV (pass --journal-csv or open the "
+             "journal app once) — section omitted")
+        return None
+    try:
+        _closed, opens, _orphans = tj.parse_fidelity_csv(csv_path)
+    except Exception as e:
+        warn(f"holdings: journal CSV unreadable ({e}) — section omitted")
+        return None
+    tags = load_journal_tags(args.journal_tags_db or tj.DB_PATH)
+    groups, n_excl = _holdings_lot_groups(opens, tags, tj)
+
+    # ── Authoritative per-account counts/basis (holdings.py, optional) ──
+    hold = None
+    hold_dir = args.holdings_dir
+    try:
+        import holdings as holdings_mod
+        if not hold_dir:
+            hold_dir = holdings_mod.default_csv_dir() or os.path.dirname(csv_path)
+        paths = holdings_mod.discover_csvs(hold_dir)
+        if paths:
+            hold = holdings_mod.build_from_paths(
+                paths, positions_paths=holdings_mod.discover_positions(hold_dir))
+            for w in hold.get("warnings", [])[:6]:
+                warn(f"holdings.py: {w}")
+        else:
+            warn(f"holdings: no Accounts_History*.csv in {hold_dir} — "
+                 f"per-account totals unavailable (journal lots only)")
+    except Exception as e:
+        warn(f"holdings: holdings.py engine unavailable ({e}) — "
+             f"per-account totals unavailable")
+    hold_stocks = {r["t"]: r for r in (hold or {}).get("stocks", [])}
+
+    # ── Verdict stack (optional) ──
+    sc = dg = None
+    verdict_source = "diagnose.py"
+    if args.offline:
+        verdict_source = "unavailable (offline build)"
+    else:
+        try:
+            sc, dg = import_swing_stack()
+        except Exception as e:
+            verdict_source = f"unavailable ({e})"
+            warn(f"holdings: swing stack not importable ({e}) — "
+                 f"verdicts/levels omitted, data still renders")
+
+    regime_summary = "regime unavailable"
+    if sc is not None:
+        try:
+            reg = sc.Regime()
+            reg.assess()
+            regime_summary = reg.summary()
+        except Exception:
+            regime_summary = "regime unavailable (network)"
+
+    # Tickers held per holdings.py but with no journal lots at all (bought
+    # pre-window / never tagged). Shown, honestly labeled — not silently
+    # dropped, not silently merged (plan: no silent gaps).
+    only_excl = set()
+    for leg in opens:
+        t = (leg.get("ticker") or "").strip().upper()
+        key = option_underlying(t) if leg.get("is_option") else t
+        if key and key not in groups:
+            only_excl.add(key)
+    untracked = sorted(set(hold_stocks) - set(groups) - only_excl)
+
+    rows = []
+    for sym in sorted(set(groups) | set(untracked)):
+        g = groups.get(sym, {"swing": [], "leap": []})
+        is_untracked = sym not in groups
+        df = price = chg_pct = None
+        score, cond_set, profile = 0, set(), {}
+        trend_lbl, ema200_pct = "mixed / no clean alignment", None
+        swing_high = swing_low = None
+        obv_lbl = ""
+        if sc is not None:
+            oldest = None
+            for leg in g["swing"] + g["leap"]:
+                bd = leg["buy_date"].date() if hasattr(leg["buy_date"], "date") else leg["buy_date"]
+                oldest = bd if oldest is None or bd < oldest else oldest
+            try:
+                df = sc.fetch_ohlcv(sym, period=period_for_lots(oldest, journal_date))
+                if df is not None and len(df) >= 30:
+                    df = sc.add_indicators(df.copy())
+                    idx = len(df) - 1
+                    r, p = df.iloc[idx], df.iloc[max(0, idx - 1)]
+                    price = round(float(r["Close"]), 2)
+                    prev_close = float(p["Close"])
+                    chg_pct = (round((price - prev_close) / prev_close * 100, 2)
+                               if prev_close else None)
+                    score, _n, cond_set = sc.buy_score(r, p)
+                    profile = sc.classify_setup(df, idx, cond_set, None)
+                    e9, e21 = float(r.get("EMA9", 0)), float(r.get("EMA21", 0))
+                    ema50, ema200 = float(r.get("EMA50", 0)), float(r.get("EMA200", 0))
+                    trend_lbl = _trend_label(e9, e21, ema50)
+                    ema200_pct = (round((price - ema200) / ema200 * 100, 1)
+                                  if ema200 > 0 else None)
+                    sh, sl = r.get("swing_high_20"), r.get("swing_low_20")
+                    swing_high = float(sh) if sh is not None else None
+                    swing_low = float(sl) if sl is not None else None
+                    obv_lbl = ("rising (accumulation)"
+                               if float(r.get("OBV_slope", 0)) > 0
+                               else "falling (distribution)")
+                else:
+                    df = None
+                    warn(f"holdings: {sym}: no usable price history — "
+                         f"verdict/levels omitted for this row")
+            except Exception as e:
+                df = None
+                warn(f"holdings: {sym}: enrich failed ({e}) — data-only row")
+
+        # per-lot rows
+        lots, lot_flags = [], []
+        for leg in g["swing"]:
+            if df is not None and dg is not None:
+                pos = dg._enrich_position(leg, df)
+                lot = _swing_lot_row(pos, leg, df)
+            else:
+                bd = leg["buy_date"].date() if hasattr(leg["buy_date"], "date") else leg["buy_date"]
+                lot = {"type": "swing", "account": str(leg.get("account", "?")),
+                       "buyDate": bd.isoformat(),
+                       "qty": round(float(leg.get("qty", 0)), 4),
+                       "buyPrice": round(float(leg.get("buy_price", 0)), 2),
+                       "basis": round(float(leg.get("buy_cost") or 0), 2),
+                       "daysHeld": int(leg.get("hold_days", 0)),
+                       "flags": [], "flagReason": None,
+                       "stop": None, "t1": None, "t2": None,
+                       "atrEntry": None, "anchor": "unavailable",
+                       "short": bool(leg.get("is_short"))}
+            lots.append(lot)
+            lot_flags.extend(lot.get("flags") or [])
+        for leg in g["leap"]:
+            lots.append(_leap_lot_row(leg, df, price))
+
+        # verdicts (single copy: diagnose.py)
+        verdict = leap_read = None
+        if dg is not None and df is not None and profile:
+            swing_pos = [l for l in lots if l["type"] == "swing" and l.get("flags")]
+            try:
+                verdict = dg._plain_english_verdict(
+                    held=bool(g["swing"]), score=score, cond_set=cond_set,
+                    trend_lbl=trend_lbl, profile=profile,
+                    regime_summary=regime_summary, positions=swing_pos,
+                    swing_high=swing_high, swing_low=swing_low, obv_lbl=obv_lbl)
+            except Exception as e:
+                warn(f"holdings: {sym}: verdict failed ({e})")
+            if g["leap"]:
+                try:
+                    leap_read = dg._leap_thesis_verdict(
+                        profile, trend_lbl, ema200_pct, swing_low, regime_summary)
+                except Exception as e:
+                    warn(f"holdings: {sym}: LEAP thesis read failed ({e})")
+
+        # authoritative totals (holdings.py) + coverage check
+        hrow = hold_stocks.get(sym)
+        shares = hrow["shares"] if hrow else round(
+            sum(l["qty"] for l in lots if l["type"] == "swing"), 4)
+        basis = hrow["basis"] if hrow else round(
+            sum(l["basis"] for l in lots if l["type"] == "swing"), 2)
+        lot_qty = round(sum(l["qty"] for l in lots if l["type"] == "swing"), 4)
+        coverage = None
+        if hrow and abs(lot_qty - (hrow["shares"] or 0)) > 0.01:
+            coverage = {"lotQty": lot_qty, "heldQty": hrow["shares"]}
+        value = round(price * shares, 2) if price is not None and shares else None
+        pl_pct = (round((value - basis) / basis * 100, 2)
+                  if value is not None and basis else None)
+
+        badges = []
+        if g["swing"]:
+            badges.append("swing")
+        if g["leap"]:
+            badges.append("leap")
+        if is_untracked:
+            badges.append("untracked")
+
+        bucket = ("untracked" if is_untracked
+                  else triage_bucket(lot_flags, (leap_read or {}).get("call")))
+        rows.append({
+            "t": sym, "price": price, "chgPct": chg_pct,
+            "badges": badges, "bucket": bucket,
+            "flags": sorted(set(lot_flags)),
+            "verdict": verdict, "leap": leap_read,
+            "score": score if df is not None else None,
+            "shares": shares, "basis": basis, "value": value, "plPct": pl_pct,
+            "accounts": (hrow or {}).get("accounts", []),
+            "holdingsFlags": (hrow or {}).get("flags", []),
+            "lotCoverage": coverage,
+            "lots": lots,
+        })
+
+    # ── summary / triage header ──
+    def _brief(r):
+        call = None
+        if r["verdict"]:
+            for ln in r["verdict"]:
+                if "→" in ln:
+                    call = ln.split("→", 1)[1].strip().split(".")[0]
+                    break
+        if not call and r["leap"]:
+            call = r["leap"]["call"]
+        return {"t": r["t"], "call": call or (", ".join(r["flags"]) or "—"),
+                "badges": r["badges"]}
+
+    look = [r for r in rows if r["bucket"] == "look"]
+    fine = [r for r in rows if r["bucket"] == "fine"]
+    untr = [r for r in rows if r["bucket"] == "untracked"]
+    tot_basis = round(sum(r["basis"] or 0 for r in rows), 2)
+    tot_value = round(sum(r["value"] or 0 for r in rows if r["value"]), 2)
+    priced_basis = round(sum(r["basis"] or 0 for r in rows if r["value"]), 2)
+    tot_pl = round(tot_value - priced_basis, 2) if tot_value else None
+    tot_pl_pct = (round(tot_pl / priced_basis * 100, 2)
+                  if tot_pl is not None and priced_basis else None)
+
+    # ── freshness (plan §7) ──
+    asof_candidates = []
+    we = (hold or {}).get("windowEnd")
+    if we:
+        asof_candidates.append(dt.date.fromisoformat(we[:10]))
+    snap = (hold or {}).get("snapshotAsOf")
+    if snap:
+        asof_candidates.append(dt.date.fromisoformat(str(snap)[:10]))
+    try:
+        csv_mtime = dt.datetime.fromtimestamp(os.path.getmtime(csv_path))
+        asof_candidates.append(csv_mtime.date())
+    except OSError:
+        csv_mtime = None
+    positions_asof = max(asof_candidates) if asof_candidates else None
+    stale, stale_reason = staleness(positions_asof, dt.date.today())
+
+    return {
+        "meta": {
+            "positionsAsOf": positions_asof.isoformat() if positions_asof else None,
+            "journalCsv": os.path.basename(csv_path),
+            "journalCsvMtime": csv_mtime.isoformat(timespec="seconds") if csv_mtime else None,
+            "holdingsWindowEnd": we,
+            "snapshotAsOf": snap,
+            "holdingsSource": (hold or {}).get("source"),
+            "stale": stale, "staleReason": stale_reason,
+            "generatedAt": dt.datetime.now().isoformat(timespec="seconds"),
+            "verdictSource": verdict_source,
+            "regime": regime_summary,
+            "excludedLots": n_excl,
+        },
+        "summary": {
+            "tickers": len(rows),
+            "needsLook": [_brief(r) for r in look],
+            "ridingFine": [_brief(r) for r in fine],
+            "untracked": [r["t"] for r in untr],
+            "totals": {"basis": tot_basis, "value": tot_value or None,
+                       "pl": tot_pl, "plPct": tot_pl_pct},
+        },
+        "rows": rows,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Trade Journal crypto — CONTRACT-JOURNAL.md §1 (stdlib only, byte-exact
 #  scheme mirrored by the pure-JS decryptor in journal_dashboard.html)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1170,9 +1664,55 @@ def selftest():
     except ValueError:
         pass
 
+    # ── Daily Holdings pure helpers (HOLDINGS_DAILY_REPORT_BUILD_PLAN) ──
+    # option underlying extraction (holdings.py OPTION_SYMBOL_RE convention)
+    assert option_underlying("-PLTR260116C130") == "PLTR"
+    assert option_underlying("PLTR260116C130") == "PLTR"
+    assert option_underlying("-TSLA270115P200.5") == "TSLA"
+    assert option_underlying("PLTR") is None            # plain stock
+    assert option_underlying("") is None and option_underlying(None) is None
+
+    # entry-anchored levels (D4: stop=−2×ATR, T1=+2×ATR, T2=+3×ATR at entry)
+    assert entry_levels(100.0, 5.0) == (90.0, 110.0, 115.0)
+    assert entry_levels(100.0, None) == (None, None, None)
+    assert entry_levels(100.0, 0) == (None, None, None)
+    assert entry_levels(None, 5.0) == (None, None, None)
+
+    # history period must reach past the oldest lot (§6)
+    _t = dt.date(2026, 7, 12)
+    assert period_for_lots(None, _t) == "1y"
+    assert period_for_lots(dt.date(2026, 5, 1), _t) == "1y"
+    assert period_for_lots(dt.date(2025, 6, 1), _t) == "2y"
+    assert period_for_lots(dt.date(2023, 1, 1), _t) == "5y"
+    assert period_for_lots(dt.date(2018, 1, 1), _t) == "max"
+
+    # ATR anchor = nearest bar at/preceding the buy date
+    _dates = [dt.date(2026, 7, d) for d in (6, 7, 8, 9, 10)]
+    assert nearest_preceding_idx(_dates, dt.date(2026, 7, 8)) == 2   # exact
+    assert nearest_preceding_idx(_dates, dt.date(2026, 7, 11)) == 4  # weekend buy -> Fri
+    assert nearest_preceding_idx(_dates, dt.date(2026, 7, 5)) is None  # pre-history
+
+    # staleness (§7): weekend-aware, never silently fresh
+    assert last_trading_day(dt.date(2026, 7, 12)) == dt.date(2026, 7, 10)  # Sun -> Fri
+    assert last_trading_day(dt.date(2026, 7, 10)) == dt.date(2026, 7, 10)  # Fri
+    assert staleness(dt.date(2026, 7, 10), dt.date(2026, 7, 12))[0] is False
+    _st, _rs = staleness(dt.date(2026, 7, 8), dt.date(2026, 7, 12))
+    assert _st is True and "2026-07-08" in _rs
+    assert staleness(None, dt.date(2026, 7, 12)) == (True, "no positions data date available")
+
+    # triage bucketing: any non-HOLD lot flag or LEAP thesis at risk -> look
+    assert triage_bucket(["HOLD"], None) == "fine"
+    assert triage_bucket(["HOLD", "WATCH"], None) == "look"
+    assert triage_bucket([], "THESIS INTACT") == "fine"
+    assert triage_bucket([], "THESIS INTACT BUT SOFTENING") == "fine"
+    assert triage_bucket([], "THESIS AT RISK") == "look"
+    assert triage_bucket(["ROT~"], "THESIS INTACT") == "look"
+
     print("selftest OK — signal cleanup, statusKind, ACT NOW derivations, "
           "watchlist split, rev mapping, journal crypto (test vector + "
-          "random round-trip + wrong-password rejection) all pass")
+          "random round-trip + wrong-password rejection), holdings helpers "
+          "(underlying extraction, entry levels, period/anchor, staleness, "
+          "triage) all pass")
     return 0
 
 
@@ -1207,6 +1747,13 @@ def main(argv=None):
                     help="file containing the journal password")
     ap.add_argument("--no-journal", action="store_true",
                     help="skip the encrypted Trade Journal section")
+    # Daily Holdings Report — HOLDINGS_DAILY_REPORT_BUILD_PLAN_20260712.md
+    ap.add_argument("--holdings-dir", default=None,
+                    help="folder with Accounts_History*.csv / "
+                         "Portfolio_Positions*.csv (default: journal app's "
+                         "CSV folder)")
+    ap.add_argument("--no-holdings", action="store_true",
+                    help="skip the Daily Holdings section")
     args = ap.parse_args(argv)
 
     if args.selftest:
@@ -1266,6 +1813,13 @@ def main(argv=None):
     leaps, day_scores, leap_max = build_leaps(leap_recs, date_key, quotes)
     heatmap = build_heatmap(csv_rows, quotes, day_scores, leap_max)
     market = build_market(swing, indexes)
+    holdings_sec = None
+    if not args.no_holdings:
+        try:
+            holdings_sec = build_holdings(args, journal_date)
+        except Exception as e:
+            warn(f"holdings section failed ({e}) — omitted; everything else "
+                 f"still builds")
 
     day_payload = {
         "label": f"{journal_date:%a}, {journal_date:%b} {journal_date.day} {journal_date.year}",
@@ -1277,6 +1831,8 @@ def main(argv=None):
         "meta": {"source": "live",
                  "generated": (swing_ts or dt.datetime.now()).isoformat(timespec="seconds")},
     }
+    if holdings_sec is not None:
+        day_payload["holdings"] = holdings_sec
 
     # ── History maintenance ──
     if args.no_history:
@@ -1331,6 +1887,18 @@ def main(argv=None):
     print(f"Heatmap      : {len(heatmap)} tiles ({n_act} active / {n_exc} excluded)")
     print(f"LEAPs        : original {len(leaps['original'])} (top {leaps['origTopScore']}/{leaps['max']}) "
           f"· exceeders {len(leaps['exceeders'])}")
+    if args.no_holdings:
+        print("Holdings     : skipped (--no-holdings)")
+    elif holdings_sec is None:
+        print("Holdings     : omitted (see WARN above)")
+    else:
+        hs, hm = holdings_sec["summary"], holdings_sec["meta"]
+        print(f"Holdings     : {hs['tickers']} tickers — "
+              f"⚠ {len(hs['needsLook'])} need a look / "
+              f"✓ {len(hs['ridingFine'])} fine / "
+              f"{len(hs['untracked'])} untracked"
+              + (f" · STALE ({hm['staleReason']})" if hm["stale"] else
+                 f" · positions as of {hm['positionsAsOf']}"))
     if args.no_journal:
         journal_line = "skipped (--no-journal)"
     elif journal_locked is not None:
