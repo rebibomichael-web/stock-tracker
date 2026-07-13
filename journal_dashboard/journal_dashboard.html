@@ -896,6 +896,7 @@
     <div class="sec-body">
       <div id="holdStale"></div>
       <div id="holdTriage"></div>
+      <div id="holdExcl"></div>
       <div id="holdList"></div>
       <div class="hold-meta" id="holdMeta"></div>
     </div>
@@ -1975,11 +1976,11 @@ function loadJournals() {
   function renderHoldings(day) {
     const h = day.holdings;
     const stale = $("holdStale"), triage = $("holdTriage"),
-          list = $("holdList"), meta = $("holdMeta");
+          list = $("holdList"), meta = $("holdMeta"), exBox = $("holdExcl");
     if (!h) {
       $("holdSub").textContent = "not in this build";
       $("holdCnt").textContent = "";
-      stale.innerHTML = triage.innerHTML = meta.innerHTML = "";
+      stale.innerHTML = triage.innerHTML = meta.innerHTML = exBox.innerHTML = "";
       list.innerHTML = '<div class="empty">No holdings data for this date — '
         + "rebuild with the Phase-A build_journal_data.py.</div>";
       return;
@@ -2012,26 +2013,60 @@ function loadJournals() {
       tri += ' <span class="ht-lbl">· Σ holdings $' + fmtPrice(tt.value)
         + ' <span class="pct ' + pctCls(tt.plPct) + '">(' + sPct(tt.plPct, 1) + ")</span></span>";
     }
-    // Excluded-strategy group: hidden as rows by design, totaled here.
-    // Tracks the journal's Excluded tags — no hardcoded ticker list.
+    // Excluded-strategy group: hidden from the triage rows by design; the
+    // triage line carries the group total and the table below breaks it out
+    // per ticker (shares · value · adjusted basis across all accounts ·
+    // $/% up-down). Tracks the journal's Excluded tags — no hardcoded list.
     const ex = s.excluded;
     if (ex && (ex.tickers || []).length) {
-      tri += ' <span class="ht-lbl">· Excluded (journal):</span> '
-        + ex.tickers.map(t => '<span class="ht-chip untr" data-diag="' + esc(t) + '">' + esc(t) + "</span>").join(" ");
       if (ex.value != null) {
-        tri += ' <span class="ht-lbl">$' + fmtPrice(ex.value)
-          + (ex.plPct != null
-              ? ' <span class="pct ' + pctCls(ex.plPct) + '">(' + sPct(ex.plPct, 1) + ")</span>"
+        tri += ' <span class="ht-lbl">· Excluded (journal): $' + fmtPrice(ex.value)
+          + (ex.pl != null
+              ? ' <span class="pct ' + pctCls(ex.plPct) + '">' + (ex.pl >= 0 ? "+" : "−")
+                + "$" + fmtPrice(Math.abs(ex.pl)) + " (" + sPct(ex.plPct, 1) + ")</span>"
               : "")
           + "</span>";
       } else if (ex.basis) {
-        tri += ' <span class="ht-lbl">basis $' + fmtPrice(ex.basis) + " (unpriced)</span>";
-      }
-      if ((ex.unpriced || []).length && ex.value != null) {
-        tri += ' <span class="ht-lbl">(' + ex.unpriced.map(esc).join(" ") + " unpriced)</span>";
+        tri += ' <span class="ht-lbl">· Excluded (journal): basis $' + fmtPrice(ex.basis) + " (unpriced)</span>";
       }
     }
     triage.innerHTML = tri;
+
+    if (ex && (ex.rows || []).length) {
+      const fmtSh = q => {
+        if (q == null) return "—";
+        const s = q.toFixed(4).replace(/\.?0+$/, "");
+        const dot = s.indexOf(".");
+        const intPart = dot < 0 ? s : s.slice(0, dot);
+        return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+          + (dot < 0 ? "" : s.slice(dot));
+      };
+      const money = v => v == null ? "—" : "$" + fmtPrice(v);
+      const signMoney = v => v == null ? "—"
+        : (v >= 0 ? "+" : "−") + "$" + fmtPrice(Math.abs(v));
+      let xh = '<div class="tblwrap"><table><thead><tr>'
+        + '<th class="cl">Excluded (journal)</th><th>Shares</th><th>Value</th>'
+        + '<th>Adj basis</th><th>$ +/−</th><th>% +/−</th></tr></thead><tbody>';
+      ex.rows.forEach(r => {
+        xh += '<tr><td class="cl tk-cell"><span class="ht-chip untr" data-diag="' + esc(r.t) + '">'
+          + esc(r.t) + "</span></td>"
+          + '<td class="num">' + fmtSh(r.shares) + "</td>"
+          + '<td class="num">' + money(r.value) + (r.value == null ? ' <span class="ht-lbl">unpriced</span>' : "") + "</td>"
+          + '<td class="num">' + money(r.basis) + "</td>"
+          + '<td class="num ' + pctCls(r.plPct) + '">' + signMoney(r.pl) + "</td>"
+          + '<td class="num ' + pctCls(r.plPct) + '">' + sPct(r.plPct, 1) + "</td></tr>";
+      });
+      if (ex.rows.length > 1 && ex.value != null) {
+        xh += '<tr><td class="cl"><b>Σ across all accounts</b></td><td class="num">—</td>'
+          + '<td class="num"><b>' + money(ex.value) + "</b></td>"
+          + '<td class="num"><b>' + money(ex.basis) + "</b></td>"
+          + '<td class="num ' + pctCls(ex.plPct) + '"><b>' + signMoney(ex.pl) + "</b></td>"
+          + '<td class="num ' + pctCls(ex.plPct) + '"><b>' + sPct(ex.plPct, 1) + "</b></td></tr>";
+      }
+      exBox.innerHTML = xh + "</tbody></table></div>";
+    } else {
+      exBox.innerHTML = "";
+    }
 
     if (!(h.rows || []).length) {
       list.innerHTML = '<div class="empty">no open holdings in the journal</div>';

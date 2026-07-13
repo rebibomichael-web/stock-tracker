@@ -762,10 +762,11 @@ def _holdings_lot_groups(opens, tags, tj, money_market=frozenset()):
 
 
 def _excluded_group(excl_legs, hold_stocks, quotes, mixed=frozenset()):
-    """All open journal lots tagged Excluded -> one group total for the
-    summary line ("what are my long-term/excluded holdings worth"). They
-    stay hidden as rows (plan D1) — this is a total only, so the group
-    tracks the journal's Excluded tags automatically, no hardcoded list.
+    """All open journal lots tagged Excluded -> group total for the summary
+    line plus per-ticker rows (shares, value, adjusted basis across all
+    accounts, $/% up-down) for the small table under it. They stay out of
+    the triage rows (plan D1) — the group tracks the journal's Excluded
+    tags automatically, no hardcoded list.
 
     shares/basis prefer holdings.py's authoritative per-ticker numbers when
     ALL of a ticker's lots are Excluded (matches the row logic; catches
@@ -793,7 +794,7 @@ def _excluded_group(excl_legs, hold_stocks, quotes, mixed=frozenset()):
     if not per:
         return None
     basis = value = priced_basis = 0.0
-    unpriced = []
+    rows, unpriced = [], []
     for t in sorted(per):
         d = per[t]
         shares, tb = d["qty"], d["basis"]
@@ -801,19 +802,26 @@ def _excluded_group(excl_legs, hold_stocks, quotes, mixed=frozenset()):
         if hrow and t not in mixed:
             shares = hrow.get("shares") or shares
             tb = hrow.get("basis") or tb
+        tb = round(tb, 2)
         basis += tb
         price = ((quotes or {}).get(t) or {}).get("price")
+        tval = tpl = tpct = None
         if price is not None and shares and not d["opt"]:
-            value += price * shares
+            tval = round(price * shares, 2)
+            tpl = round(tval - tb, 2)
+            tpct = round(tpl / tb * 100, 2) if tb else None
+            value += tval
             priced_basis += tb
         else:
             unpriced.append(t)
+        rows.append({"t": t, "shares": round(shares, 4) if shares else None,
+                     "basis": tb, "value": tval, "pl": tpl, "plPct": tpct})
     value = round(value, 2) if value else None
     pl = round(value - priced_basis, 2) if value is not None else None
     pl_pct = (round(pl / priced_basis * 100, 2)
               if pl is not None and priced_basis else None)
-    return {"tickers": sorted(per), "basis": round(basis, 2), "value": value,
-            "pl": pl, "plPct": pl_pct, "unpriced": unpriced}
+    return {"tickers": sorted(per), "rows": rows, "basis": round(basis, 2),
+            "value": value, "pl": pl, "plPct": pl_pct, "unpriced": unpriced}
 
 
 def _trend_label(e9, e21, ema50):
@@ -1816,9 +1824,15 @@ def selftest():
     assert _g["value"] == 3.0 * 400.0 + 10.0 * 12.0 + 1.0 * 140.0    # option lot unpriced
     assert _g["unpriced"] == ["NFLX"]
     assert _g["pl"] == round(_g["value"] - (700.0 + 150.0 + 140.0), 2)
+    _rows = {r["t"]: r for r in _g["rows"]}
+    assert _rows["TSLA"] == {"t": "TSLA", "shares": 3.0, "basis": 700.0,
+                             "value": 1200.0, "pl": 500.0, "plPct": 71.43}
+    assert _rows["SSYS"]["shares"] == 10.0 and _rows["SSYS"]["pl"] == -30.0
+    assert _rows["NFLX"]["value"] is None and _rows["NFLX"]["basis"] == 300.0
     assert _excluded_group([], _hold, _q) is None
     _g2 = _excluded_group([{"ticker": "TSLA", "qty": 2.0, "buy_cost": 500.0}], {}, {})
     assert _g2["value"] is None and _g2["unpriced"] == ["TSLA"] and _g2["basis"] == 500.0
+    assert _g2["rows"][0]["shares"] == 2.0 and _g2["rows"][0]["value"] is None
 
     print("selftest OK — signal cleanup, statusKind, ACT NOW derivations, "
           "watchlist split, rev mapping, journal crypto (test vector + "
