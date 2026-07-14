@@ -1404,6 +1404,9 @@ function loadJournals() {
 
   // ── formatting helpers ────────────────────────────────
   function fmtPrice(p) {
+    // Null/NaN guard: a single missing price used to throw here and blank
+    // the whole dashboard (every section renders through this helper).
+    if (p == null || typeof p !== "number" || !isFinite(p)) return "—";
     if (p >= 1000) return p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (p < 1) return p.toFixed(4);
     return p.toFixed(2);
@@ -1814,6 +1817,7 @@ function loadJournals() {
     t.exitPrice = price; t.exitAt = new Date().toISOString(); t.exitAsOf = asOf;
     t.status = "closed";
     savePaper(list);
+    renderOver75(JOURNALS[selected]);     // refresh the "(N open)" badge
     renderPaperLedger();
   }
   function removePaper(id) {
@@ -1904,13 +1908,15 @@ function loadJournals() {
     const day = JOURNALS[selected];
     const tipEl = document.getElementById("tip");
     if (tipEl) tipEl.style.display = "none";
-    renderHeader(day);
-    renderMarket(day);
-    renderHeatmap(day);
-    renderLeaps(day);
-    renderActNow(day);
-    renderPositions(day);
-    renderOver75(day);
+    // Each section renders independently: one bad data point must not blank
+    // every other section (that read as "dashboard wouldn't update").
+    [["header", renderHeader], ["market", renderMarket],
+     ["heatmap", renderHeatmap], ["leaps", renderLeaps],
+     ["actnow", renderActNow], ["positions", renderPositions],
+     ["over75", renderOver75]].forEach(function (s) {
+      try { s[1](day); }
+      catch (err) { console.error("render failed [" + s[0] + "]:", err); }
+    });
   }
 
   function setDate(d) {

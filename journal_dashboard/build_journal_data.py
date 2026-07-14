@@ -31,11 +31,15 @@ import csv
 import datetime as dt
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
+import re
+import socket
 import sqlite3
 import struct
 import sys
+import time
 import types
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -146,6 +150,38 @@ except ImportError:
 
 def warn(msg):
     print(f"WARN: {msg}", flush=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Live-fetch budget — the cron build used to hang forever on one stuck
+#  yfinance call and journal_data.js was never rewritten ("dashboard
+#  wouldn't update").  Two bounds, both belt-and-braces:
+#    · socket default timeout: no single HTTP call can hang indefinitely
+#    · a global deadline checked between per-ticker fetches: the whole
+#      live-fetch phase is bounded; remaining tickers degrade to null
+#      (nulls are already the documented offline behavior).
+# ═══════════════════════════════════════════════════════════════════════════
+
+_FETCH_DEADLINE = None
+_FETCH_DEADLINE_WARNED = False
+
+
+def set_fetch_deadline(seconds):
+    global _FETCH_DEADLINE, _FETCH_DEADLINE_WARNED
+    _FETCH_DEADLINE = time.monotonic() + seconds
+    _FETCH_DEADLINE_WARNED = False
+    socket.setdefaulttimeout(30)
+
+
+def fetch_deadline_passed(what):
+    global _FETCH_DEADLINE_WARNED
+    if _FETCH_DEADLINE is None or time.monotonic() <= _FETCH_DEADLINE:
+        return False
+    if not _FETCH_DEADLINE_WARNED:
+        warn(f"live-fetch budget exhausted at {what} — remaining fetches "
+             f"skipped, fields degrade to null")
+        _FETCH_DEADLINE_WARNED = True
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -344,6 +380,8 @@ def fetch_quotes_live(tickers):
         warn(f"yfinance not importable ({e}) — quotes degraded to null")
         return out
     for t in tickers:
+        if fetch_deadline_passed(f"quotes ({t})"):
+            break
         try:
             h = yf.Ticker(t).history(period="5d", interval="1d", auto_adjust=True)
             if h is None or len(h) == 0:
@@ -365,6 +403,8 @@ def fetch_quotes_live(tickers):
 
 def fetch_worst_low_live(ticker, start_date):
     """Min Low since start_date (swing_flag semantics). None on any failure."""
+    if fetch_deadline_passed(f"worst_low ({ticker})"):
+        return None
     try:
         import yfinance as yf
     except ImportError as e:
@@ -405,6 +445,8 @@ def fetch_indexes_live():
         return []
     tiles = []
     for tkr, name in INDEX_TICKERS:
+        if fetch_deadline_passed(f"index ({tkr})"):
+            break
         price = chg = None
         try:
             h = yf.Ticker(tkr).history(period="5d", interval="1d", auto_adjust=True)
@@ -637,8 +679,10 @@ def _journal_keystream(enc_key, nonce, length):
 def encrypt_journal(plaintext, password, salt=None, nonce=None,
                     iters=JOURNAL_PBKDF2_ITERS):
     """Encrypt plaintext bytes -> SWING_JOURNAL_LOCKED blob dict.
-    salt/nonce parameters exist for the test vector only; production callers
-    leave them None (os.urandom)."""
+    nonce=None (os.urandom) in production, set only by the test vector.
+    salt may be passed to KEEP the previous build's salt (see
+    build_journal_locked: "remember this device" caches keys by salt, so
+    the salt must be stable while the password is unchanged)."""
     if salt is None:
         salt = os.urandom(16)
     if nonce is None:
@@ -762,17 +806,54 @@ def _prepare_gui_stubs():
 
 
 def import_trade_journal():
-    """Headless import of the user's trade_journal module.
-    sys.path candidates in order: this script's dir, ~/Downloads,
-    ~/trading-src/journal. Raises on failure (caller WARNs + skips)."""
-    for cand in (_SCRIPT_DIR,
-                 os.path.expanduser("~/Downloads"),
-                 os.path.expanduser("~/trading-src/journal")):
-        if os.path.isdir(cand) and cand not in sys.path:
-            sys.path.append(cand)
+    """Headless import of the user's trade_journal module from an EXPLICIT
+    file path (importlib), never `import trade_journal` off sys.path — a
+    stale copy sitting next to this script (or anywhere earlier on the
+    path) used to silently shadow the maintained one, so the dashboard
+    computed with an old engine while the desktop app used the new one.
+
+    Priority: ~/Downloads (the live copy the desktop shortcut runs) ·
+    this script's dir · ~/trading-src/journal.  The chosen path is printed
+    every run, and any OTHER candidate that differs from it draws a WARN
+    so a stale shadow can't hide.  Raises on failure (caller WARNs+skips)."""
+    candidates = [
+        os.path.join(os.path.expanduser("~/Downloads"), "trade_journal.py"),
+        os.path.join(_SCRIPT_DIR, "trade_journal.py"),
+        os.path.join(os.path.expanduser("~/trading-src/journal"),
+                     "trade_journal.py"),
+    ]
+    found = []
+    for p in candidates:
+        if os.path.isfile(p) and os.path.realpath(p) not in \
+                (os.path.realpath(q) for q in found):
+            found.append(p)
+    if not found:
+        raise ImportError("trade_journal.py not found in ~/Downloads, "
+                          f"{_SCRIPT_DIR}, or ~/trading-src/journal")
+    target = found[0]
+
+    def _sha(path):
+        try:
+            with open(path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            return None
+
+    target_sha = _sha(target)
+    for other in found[1:]:
+        other_sha = _sha(other)
+        if other_sha is not None and other_sha != target_sha:
+            warn(f"another trade_journal.py at {other} DIFFERS from the one "
+                 f"in use ({target}) — stale copy? Delete or update it so "
+                 f"the app and dashboard can't drift apart")
+
     _prepare_gui_stubs()
-    import trade_journal
-    return trade_journal
+    spec = importlib.util.spec_from_file_location("trade_journal", target)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["trade_journal"] = mod
+    spec.loader.exec_module(mod)
+    print(f"journal engine: {target}", flush=True)
+    return mod
 
 
 def load_journal_tags(db_path):
@@ -793,13 +874,21 @@ def load_journal_tags(db_path):
 
 def apply_journal_tags(tj, legs, tags):
     """App tagging rules: saved tag wins (via LEGACY_METHOD_MAP), else
-    trade_journal.default_method_for(leg). Mutates legs in place."""
+    trade_journal.default_method_for(leg). Mutates legs in place.
+    Fail loud on orphaned tags: a saved tag whose trade_key matches no leg
+    means that trade silently fell back to a default method (skews the
+    Swing/LEAP split) — usually after an engine re-keying."""
     for leg in legs:
         saved = tags.get(leg["trade_key"])
         if saved:
             leg["method"] = tj.LEGACY_METHOD_MAP.get(saved, saved)
         else:
             leg["method"] = tj.default_method_for(leg)
+    present = {leg["trade_key"] for leg in legs}
+    unbound = sum(1 for k in tags if k not in present)
+    if unbound:
+        warn(f"{unbound} saved tag(s) match no trade in this CSV — those "
+             f"trades use default methods (re-tag them in the journal app)")
 
 
 def _journal_method_block(tj, method, stats_legs, ws, we, allocation):
@@ -812,18 +901,25 @@ def _journal_method_block(tj, method, stats_legs, ws, we, allocation):
     avg_cap = mo_dep = turnover = 0.0
     if ml and ws is not None and we is not None:
         avg_cap, mo_dep, turnover = tj.compute_time_weighted_return(ml, ws, we)
+    wd = (we - ws).days if (ws is not None and we is not None) else 0
+    # <7-day windows: extrapolating to a monthly rate produces absurd
+    # numbers (+28,000,000%/mo).  Emit null -> the dashboard shows "—"
+    # and suppresses the 3%-target badge (its renderer is null-safe).
+    too_short = 0 < wd < 7 or (wd == 0 and count > 0)
     block = {
         "pl": round(pl, 2), "count": count, "wr": round(wr, 1),
-        "avgDeployed": round(avg_cap, 2), "moDeployed": round(mo_dep, 2),
+        "avgDeployed": round(avg_cap, 2),
+        "moDeployed": None if too_short else round(mo_dep, 2),
         "turnover": round(turnover, 2),
     }
     if method == "Swing Trader":
-        wd = (we - ws).days if (ws is not None and we is not None) else 0
         mo_sleeve = (tj.monthly_equivalent(pl / allocation, wd)
                      if (allocation > 0 and wd > 0) else 0.0)
-        block["moSleeve"] = round(mo_sleeve, 2)
+        block["moSleeve"] = None if too_short else round(mo_sleeve, 2)
         block["allocation"] = allocation
-        if mo_dep >= tj.SWING_MONTHLY_TARGET_PCT:
+        if too_short:
+            pass                       # no badge on an unusable window
+        elif mo_dep >= tj.SWING_MONTHLY_TARGET_PCT:
             block["badge"] = "ok"
         elif mo_dep >= 0:
             block["badge"] = "below"
@@ -1068,7 +1164,35 @@ def build_journal_locked(args):
 
     plaintext = json.dumps(journal, separators=(",", ":"),
                            ensure_ascii=False).encode("utf-8")
+
+    # Keep the previous salt (and iteration count) while the password is
+    # unchanged: the dashboard's "remember this device" stores derived keys
+    # keyed by the blob's salt, so a fresh salt every build silently logged
+    # every remembered browser out each day.  Password change (old blob no
+    # longer decrypts) -> new random salt, remembered devices correctly drop.
+    old = _existing_locked_blob(args.out)
+    if old is not None:
+        try:
+            decrypt_journal(old, password)
+            return encrypt_journal(
+                plaintext, password,
+                salt=base64.b64decode(old["salt"]),
+                iters=int(old.get("iter", JOURNAL_PBKDF2_ITERS)))
+        except Exception:
+            pass          # password changed or blob unreadable — rotate salt
     return encrypt_journal(plaintext, password)
+
+
+def _existing_locked_blob(out_path):
+    """The SWING_JOURNAL_LOCKED blob from an existing journal_data.js, or
+    None (missing file, no blob line, unparseable)."""
+    try:
+        with open(out_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        m = re.search(r"window\.SWING_JOURNAL_LOCKED = (\{.*?\});", text)
+        return json.loads(m.group(1)) if m else None
+    except Exception:
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1274,6 +1398,11 @@ def main(argv=None):
         for r in (leap_recs or []):
             if str(r.get("date", "")).startswith(date_key) and r.get("symbol"):
                 tickers.add(r["symbol"])
+        # Bound ALL live fetching (quotes, indexes, per-position worst-lows)
+        # so a hung network call can never stop journal_data.js from being
+        # rewritten.  The cron wrapper's `timeout 900` only helps if we also
+        # finish in-script — without this the build died with no output.
+        set_fetch_deadline(600)
         quotes = fetch_quotes_live(sorted(tickers))
         indexes = fetch_indexes_live()
 
