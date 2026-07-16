@@ -885,10 +885,35 @@ def apply_journal_tags(tj, legs, tags):
         else:
             leg["method"] = tj.default_method_for(leg)
     present = {leg["trade_key"] for leg in legs}
-    unbound = sum(1 for k in tags if k not in present)
-    if unbound:
-        warn(f"{unbound} saved tag(s) match no trade in this CSV — those "
-             f"trades use default methods (re-tag them in the journal app)")
+    leg_dates = [d for leg in legs
+                 for d in (leg.get("buy_date"), leg.get("sell_date")) if d]
+    win_lo = min(leg_dates) if leg_dates else None
+    pre_window = drift = 0
+    for k in tags:
+        if k in present:
+            continue
+        m = re.search(r"-(\d{8})-", k)
+        d = None
+        if m:
+            try:
+                d = dt.datetime.strptime(m.group(1), "%Y%m%d")
+            except ValueError:
+                pass
+        if d is not None and win_lo is not None and d < win_lo:
+            pre_window += 1
+        else:
+            drift += 1
+    if pre_window:
+        warn(f"{pre_window} saved tag(s) reference trades BEFORE this CSV's "
+             f"first row ({win_lo:%Y-%m-%d}) — the export window is too "
+             f"narrow, so those trades are missing from every dashboard "
+             f"total (a whole strategy can look profitless). Download "
+             f"Fidelity trade history with a custom date range from account "
+             f"opening and load that file in the journal app.")
+    if drift:
+        warn(f"{drift} saved tag(s) match no trade despite being inside the "
+             f"window (engine re-keying) — run rebind_tags.py to reattach "
+             f"them")
 
 
 def _journal_method_block(tj, method, stats_legs, ws, we, allocation):
