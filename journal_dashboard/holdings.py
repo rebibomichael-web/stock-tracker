@@ -64,6 +64,34 @@ OPTION_SYMBOL_RE = re.compile(r"^-?([A-Z]{1,6})\d{6}[CP][\d.]+$")
 # the ticker to its CUSIP between exports; see union_files().
 CUSIP_RE = re.compile(r"^[0-9][0-9A-Z]{7}[0-9]$")
 
+# Fidelity's newer trade-history exports write an opaque security ID in the
+# Symbol column for OPTIONS (real case: " -7826099AY") where older exports
+# wrote the readable contract (-PFE271217C27). The Description still carries
+# the full contract ("CALL (PFE) PFIZER INC DEC 17 27 $27 (100 SHS)"), so the
+# canonical symbol is rebuilt from it. Without this, option rows masquerade
+# as stocks under a garbage ticker, and the same fill exported under both
+# spellings would defeat max-multiplicity dedup.
+OPTION_DESC_RE = re.compile(
+    r"\b(CALL|PUT)\s*\(([A-Z][A-Z0-9.]{0,9})\)\s+.*?"
+    r"\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+"
+    r"(\d{1,2})\s+(\d{2})\s+\$(\d+(?:\.\d+)?)")
+_OPT_MONTH = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+              "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+
+
+def derive_option_symbol(symbol, desc):
+    """Canonical option symbol for a row whose Symbol column is an opaque
+    security ID. Symbols that already look like options, and rows whose
+    description is not an option contract, pass through unchanged."""
+    if OPTION_SYMBOL_RE.match(symbol):
+        return symbol
+    m = OPTION_DESC_RE.search(str(desc or "").upper())
+    if not m:
+        return symbol
+    cp, under, mon, day, yy, strike = m.groups()
+    return (f"-{under}{int(yy):02d}{_OPT_MONTH[mon]:02d}{int(day):02d}"
+            f"{cp[0]}{float(strike):g}")
+
 # Friendly short names for Fidelity account labels (fallback: label as-is).
 ACCOUNT_SHORT = {
     "JOINT WROS - TOD": "Joint",
@@ -161,6 +189,8 @@ def parse_file(path):
         symbol = str(col(row, "symbol")).strip().upper()
         if not symbol:
             continue                       # cash-only transfer/contribution
+        desc = str(col(row, "description")).strip()
+        symbol = derive_option_symbol(symbol, desc)
         qty = _num(col(row, "quantity"))
         if abs(qty) < QTY_EPS:
             continue
@@ -169,7 +199,7 @@ def parse_file(path):
             "date": date,
             "kind": kind,
             "symbol": symbol,
-            "desc": str(col(row, "description")).strip(),
+            "desc": desc,
             "acct": acct_num or "?",
             "acct_name": str(col(row, "account")).strip(),
             "qty": qty,                    # signed, as exported
@@ -736,6 +766,7 @@ def parse_positions_file(path):
         basis = abs(_num(basis_raw)) if basis_raw not in ("", "--", "n/a", "N/A") else None
         desc = cell(r, i_desc)
         a_type = cell(r, i_type).upper()
+        sym = derive_option_symbol(sym, desc)
         is_opt = bool(OPTION_SYMBOL_RE.match(sym)) or "OPTION" in a_type \
             or any(k in desc.upper() for k in ("CALL", "PUT"))
         rows.append({
@@ -795,6 +826,20 @@ def _tx(date, kind, sym, acct, qty, price=0.0, amount=0.0, hint=None,
 
 
 def selftest():
+    # 0. New-export option-ID symbols derive from the description (real case:
+    #    " -7826099AY" ↔ "CALL (PFE) PFIZER INC DEC 17 27 $27 (100 SHS)").
+    #    Old-format symbols and non-option rows pass through untouched, so
+    #    the same fill exported under both spellings dedups identically.
+    assert derive_option_symbol(
+        "-7826099AY", "CALL (PFE) PFIZER INC DEC 17 27 $27 (100 SHS)"
+    ) == "-PFE271217C27"
+    assert derive_option_symbol(
+        "-98765XYZ1", "PUT (BMNR) BITMINE FEB 20 26 $25.50 (100 SHS)"
+    ) == "-BMNR260220P25.5"
+    assert derive_option_symbol("-NOW280121C200", "CALL (NOW) X") == "-NOW280121C200"
+    assert derive_option_symbol("TSLA", "TESLA INC COM") == "TSLA"
+    assert derive_option_symbol("438516106", "HONEYWELL INTL INC") == "438516106"
+
     # 1. Multi-account aggregate with FIFO sell: basis of REMAINING shares.
     txns = [
         _tx("2026-01-07", "BUY", "TSLA", "X17212229", 5, 435.25, -2176.25),
