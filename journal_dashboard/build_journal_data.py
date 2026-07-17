@@ -904,12 +904,13 @@ def apply_journal_tags(tj, legs, tags):
         else:
             drift += 1
     if pre_window:
-        warn(f"{pre_window} saved tag(s) reference trades BEFORE this CSV's "
-             f"first row ({win_lo:%Y-%m-%d}) — the export window is too "
-             f"narrow, so those trades are missing from every dashboard "
-             f"total (a whole strategy can look profitless). Download "
-             f"Fidelity trade history with a custom date range from account "
-             f"opening and load that file in the journal app.")
+        warn(f"{pre_window} saved tag(s) reference trades BEFORE the loaded "
+             f"history ({win_lo:%Y-%m-%d}) — those trades are missing from "
+             f"every dashboard total (a whole strategy can look "
+             f"profitless). Fidelity caps each download at ~90 days; older "
+             f"windows only exist in exports you saved, so keep every "
+             f"Accounts_History*.csv in the journal folder — they are "
+             f"stitched automatically.")
     if drift:
         warn(f"{drift} saved tag(s) match no trade despite being inside the "
              f"window (engine re-keying) — run rebind_tags.py to reattach "
@@ -1147,7 +1148,19 @@ def build_journal_locked(args):
         return None
 
     try:
-        closed, opens, orphans = tj.parse_fidelity_csv(csv_path)
+        # Stitch every overlapping export when the engine supports it —
+        # Fidelity caps each download at ~90 days, so a single file can
+        # never hold the full history (a whole strategy can look
+        # profitless without the union).
+        multi = getattr(tj, "parse_fidelity_csvs", None)
+        sibs = getattr(tj, "_sibling_history_csvs", None)
+        paths = sibs(csv_path) if (multi and sibs) else [csv_path]
+        if len(paths) > 1:
+            closed, opens, orphans, used = multi(paths)
+            print(f"journal: stitched {used} overlapping export(s) from "
+                  f"{os.path.dirname(os.path.abspath(csv_path))}", flush=True)
+        else:
+            closed, opens, orphans = tj.parse_fidelity_csv(csv_path)
     except Exception as e:
         warn(f"journal CSV parse failed for {csv_path}: {e} — journal section "
              f"omitted")
