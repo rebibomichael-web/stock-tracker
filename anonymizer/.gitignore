@@ -1,0 +1,7 @@
+# Privacy guard: everything this tool produces from real records is local-only.
+anonymizer_mapping.json
+*mapping*.json
+*_ANON.pdf
+*_ANON_FAILED.pdf
+*_ANON_report.txt
+*_RESTORED.*

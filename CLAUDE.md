@@ -25,7 +25,7 @@ Canonical map, data flow, duplication list, and traps:
 
 The **legacy** deployed dashboard. Before adding features here, check whether
 they belong in `trading-suite` instead — retiring this repo is an open
-roadmap item there. Two loosely-coupled subprojects live here:
+roadmap item there. Three loosely-coupled subprojects live here:
 
 - **`app.py`** — the deployed Flask app ("Stock Tracker + LEAP Scanner"):
   16-ticker tracker, S3..R3 pivots via yfinance, Barchart opinion scraping.
@@ -40,6 +40,15 @@ roadmap item there. Two loosely-coupled subprojects live here:
   `~/trading-src/journal`), so it **cannot run fully from a clone** — in
   sessions use `--selftest` (pure-function tests) or `--offline`.
   `journal_data.js` is generated output, not source.
+- **`anonymizer/`** — NYC DOE record anonymizer (privacy workstream, not
+  trading): pseudonymizes student permanent-record PDFs locally before upload
+  to Claude and restores real names into returned outputs. Runs only on the
+  owner's machine; `anonymizer_mapping.json` and all its outputs are
+  local-only (see `anonymizer/.gitignore`) — never commit or upload them.
+  Tests: `python3 anonymizer/record_anonymizer.py --selftest` (pure
+  functions) and `python3 anonymizer/test_anonymizer.py` (synthetic E2E;
+  needs pymupdf/pdfplumber/openpyxl). No real student data ever goes in this
+  repo.
 - **`docs/SWING_AUDIT_2026-07-06.md`** — cross-repo audit spanning
   trading-src, trading-data, and this repo; good orientation for swing work.
 - **`mockups/`** — six frozen historical design mockups; never edit.
@@ -49,8 +58,9 @@ roadmap item there. Two loosely-coupled subprojects live here:
 - `pip install -r requirements.txt` (Python 3.11)
 - `python app.py` — port from `PORT` (default 10000); needs outbound network
   (yfinance + barchart.com), so it is fragile in restricted sessions.
-- `python3 journal_dashboard/build_journal_data.py --selftest` — the only
-  self-contained test in the repo. There is no other test suite, CI, or lint.
+- `python3 journal_dashboard/build_journal_data.py --selftest` and the two
+  anonymizer tests (see above) — the only self-contained tests in the repo.
+  There is no other test suite, CI, or lint.
 
 ## Traps
 
