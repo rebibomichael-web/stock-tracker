@@ -16,12 +16,26 @@ one coordinate space and no line reconstruction is involved.
 Safety posture (all hard requirements, see anonymizer/README.md):
   * Harvest floor — every page bearing a "Name / ID" label must yield a
     (name, OSIS) pair or the run FAILs; a vacuous pass is impossible.
-  * Residual scan — the anonymized output is re-extracted and scanned for
-    every harvested real value AND for pattern classes (LAST, FIRST shapes,
-    street addresses, DOB-range dates, 9/10-digit numbers outside the
-    synthetic ranges). Class hits FAIL the run.
-  * On FAIL the output is written with an _ANON_FAILED suffix so it cannot
-    be mistaken for a clean file.
+  * Field harvesting is label-bounded, not distance-bounded: a detached or
+    wrapped value is searched for by walking forward from its label until
+    the next label, the course-table anchor, or the header column ends —
+    never by a fixed point tolerance that can silently undershoot.
+  * Alias-presence check covers every harvested PII field, not just name/ID:
+    if a redacted value's alias could not be drawn, the run FAILs.
+  * Residual scan — the anonymized output is re-extracted (page text +
+    metadata) and scanned for every harvested real value AND for pattern
+    classes (LAST, FIRST shapes incl. short surnames/single-initial given
+    names, Title-Case "First Last" shapes, street addresses, DOB-range
+    dates, 9/10-digit numbers outside the synthetic ranges). Class hits
+    and case-variants of known values both FAIL the run.
+  * Non-PII header fields (Ofcl, Admit/Discharge/Graduation Date, Grade
+    Level, Status, Cumulative Average) are diffed original-vs-anonymized
+    and must match exactly, so a redaction that clips a neighboring field
+    is caught, not just course/exam data.
+  * Any exception (including Ctrl-C) during redaction/verification leaves
+    no file under the clean "_ANON.pdf" name — output is written under a
+    ".partial" name and only renamed to "_ANON.pdf" after a full PASS, or
+    to "_ANON_FAILED.pdf" otherwise.
 
 The mapping file (anonymizer_mapping.json, beside this script by default) is
 LOCAL ONLY: never commit it, never upload it, do back it up.
@@ -39,14 +53,14 @@ tkinterdnd2 optional for drag-and-drop.
 from __future__ import annotations
 
 import argparse
+import csv
+import datetime
 import json
 import os
 import re
 import sys
-import datetime
-from collections import defaultdict
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # --------------------------------------------------------------------------
 # Section 0 — constants
@@ -54,7 +68,8 @@ __version__ = "2.0.0"
 
 COLUMN_SPLIT_X = 304.0        # two-column newspaper flow splits here
 BAND_TOL = 3.0                # words within this y-distance form one text row
-DETACHED_TOL = 7.0            # widened window for detached Address/Parent blocks
+DETACHED_MAX_BANDS = 6        # how many rows forward a detached/wrapped
+                               # value search may walk before giving up
 
 RE_OSIS = re.compile(r"^\d{9}$")
 RE_PHONE = re.compile(r"^\d{7,}$")
@@ -67,31 +82,60 @@ MARK_CODES = {"CR", "NC", "INC", "ABS", "NS", "NU", "NW", "NX", "NL", "ND",
               "ME", "MP", "MA", "MU", "MB", "MT", "WA", "WG", "P", "F"}
 RE_MARK_NUMERIC = re.compile(r"^\d{1,3}\*{0,2}$")
 RE_MARK_LETTER = re.compile(r"^[A-F][+\-]?\*{0,2}$")
-RE_NAME_TOKEN = re.compile(r"^[A-Za-z][A-Za-z\-'.]*$")
+# Unicode-aware: teacher/parent surnames commonly carry accents (MUÑOZ,
+# GARCÍA, PEÑA) — an ASCII-only token class silently dropped those from
+# every downstream check (mark-anchor gap test, name-shape scans).
+RE_NAME_TOKEN = re.compile(r"^[^\W\d_]+(?:[\-'’.][^\W\d_]+)*$")
 
-# Synthetic alias ranges (§6): cannot collide with real values.
+# Synthetic alias ranges (§6): structurally disjoint (different leading
+# digit) so no truncation or substring extraction of one can ever equal a
+# value from the other or collide with a real 9-digit OSIS/10-digit phone.
 ALIAS_ID_BASE = 900000000     # real OSIS start with 2
-ALIAS_PHONE_BASE = 9000000000
+ALIAS_PHONE_BASE = 8000000000
+
+BUILTIN_NONPII_PHRASES = (
+    "Student Permanent Record", "Admit Date", "Discharge Date",
+    "Graduation Date", "Grade Level", "Cumulative Average",
+    "Actual Credits", "Credits Earned",
+)
+
+
+def _lbl(*words):
+    """Both a spaced ('Word :') and colon-attached ('Word:') label variant.
+
+    PyMuPDF's word tokenization follows the source PDF's exact whitespace;
+    real exports may attach the colon to the last label word instead of
+    spacing it, and earlier versions of this tool only matched one shape
+    (the missing 'Counselor:' variant let populated counselor values pass
+    through completely unharvested).
+    """
+    spaced = list(words) + [":"]
+    attached = list(words[:-1]) + [words[-1] + ":"]
+    return [spaced, attached]
+
 
 HEADER_LABELS = {
     # label key -> list of token-sequence variants (words in x order)
     "name_id":    [["Name", "/", "ID", ":"]],
-    "address":    [["Address", ":"]],
-    "phone":      [["Ph#", ":"]],
-    "dob":        [["DOB", ":"]],
+    "address":    _lbl("Address"),
+    "phone":      _lbl("Ph#"),
+    "dob":        _lbl("DOB"),
     "parent":     [["Parent:"], ["Parent", ":"]],
-    "counselor":  [["Counselor", ":"]],
-    # non-PII labels, matched only as value terminators:
-    "ofcl":       [["Ofcl", ":"]],
-    "admit":      [["Admit", "Date", ":"]],
-    "discharge":  [["Discharge", "Date", ":"]],
-    "graduation": [["Graduation", "Date", ":"]],
-    "grade":      [["Grade", "Level", ":"]],
-    "status":     [["Status", ":"]],
-    "cumulative": [["Cumulative", ":"]],
-    "cum_avg":    [["Cumulative", "Average", ":"]],
+    "counselor":  _lbl("Counselor"),
+    # non-PII labels, matched as value terminators AND compared post-redaction
+    # to catch a redaction that clipped a neighboring field:
+    "ofcl":       _lbl("Ofcl"),
+    "admit":      _lbl("Admit", "Date"),
+    "discharge":  _lbl("Discharge", "Date"),
+    "graduation": _lbl("Graduation", "Date"),
+    "grade":      _lbl("Grade", "Level"),
+    "status":     _lbl("Status"),
+    "cumulative": _lbl("Cumulative"),
+    "cum_avg":    _lbl("Cumulative", "Average"),
 }
 PII_LABELS = ("name_id", "address", "phone", "dob", "parent", "counselor")
+NONPII_COMPARE_KEYS = ("ofcl", "admit", "discharge", "graduation", "grade",
+                       "status", "cum_avg")
 
 
 # --------------------------------------------------------------------------
@@ -103,9 +147,11 @@ def student_aliases(idx):
 
     Alias spec (§6): uppercase 'LAST, FIRST'; first-name alias has a unique
     5-char prefix (F{idx:03d}X...); 9-digit IDs from 900000001; phones from
-    9000000001; DOB in 1900-1909 (never a real student DOB) and unique per
-    idx; address a single synthetic token; parent in a disjoint PL/PF
-    namespace.
+    8000000001 — a different leading digit than the ID base so no
+    truncation or substring of a phone alias can ever equal an ID alias
+    (see selftest for the concrete collision this replaced); DOB in
+    1900-1909 (never a real student DOB) and unique per idx; address a
+    single synthetic token; parent in a disjoint PL/PF namespace.
     """
     if not 1 <= idx <= 999:
         raise ValueError("student idx out of range 1..999: %r" % idx)
@@ -165,6 +211,14 @@ class Mapping:
         extra: dict of real field values seen on this page (dob, phone,
         address, parent, counselor) — stored/refreshed for the restore
         direction, but the alias assignment never changes once made.
+
+        Known limitation (mapping evolution): if this OSIS was already
+        mapped with different real field values (e.g. a later export shows
+        a new address), those values are overwritten here. Restoring an
+        OLDER output against the UPDATED mapping will then substitute the
+        newer real value. There is no per-value history — back up the
+        mapping file before re-running against a materially different
+        export if old outputs may still need restoring.
         """
         rec = self.data["students"].get(osis)
         if rec is None:
@@ -208,6 +262,10 @@ class Mapping:
         now = datetime.datetime.now().isoformat(timespec="seconds")
         self.data["created"] = self.data.get("created") or now
         self.data["updated"] = now
+        # NOT "*mapping*.json" pattern below: a crash between writing this
+        # and os.replace would strand real PII in a file .gitignore doesn't
+        # cover. Named so the existing 'anonymizer_mapping.json' glob AND a
+        # dedicated '*.tmp' rule both catch it (belt and suspenders).
         tmp = self.path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(self.data, fh, indent=2, sort_keys=True)
@@ -228,17 +286,32 @@ class Mapping:
             pairs.append((al["id"], osis))
             real = rec.get("real", {})
             for key, akey in (("dob", "dob"), ("phone", "phone"),
-                              ("address", "address"), ("parent", "parent")):
+                              ("address", "address")):
                 if real.get(key):
                     pairs.append((al[akey], real[key]))
             if real.get("parent"):
-                # bare parent-alias tokens, in case an output splits them
+                pval = real["parent"]
+                pairs.append((al["parent"], pval))
                 pl, pf = al["parent"].split(", ")
-                pairs.append((pl, real["parent"]))
-                pairs.append((pf, real["parent"]))
+                # Split like the student name so a BARE half-token restores
+                # to just that half, not the whole comma-bearing string
+                # (which both introduces an unintended comma into whatever
+                # field held the bare token and duplicates the surname).
+                if "," in pval:
+                    plast, pfirst = [p.strip() for p in pval.split(",", 1)]
+                    pairs.append((pl, plast))
+                    pairs.append((pf, pfirst))
+                else:
+                    ptoks = pval.split()
+                    if len(ptoks) >= 2:
+                        pairs.append((pl, ptoks[-1]))
+                        pairs.append((pf, " ".join(ptoks[:-1])))
+                    else:
+                        pairs.append((pl, pval))
+                        pairs.append((pf, pval))
         for name, alias in self.data["teachers"].items():
             pairs.append((alias, name))
-            if " " in alias:     # 'TCH001 T' — also map the bare base token
+            if " " in alias:     # 'TCH001 M' — also map the bare base token
                 pairs.append((alias.split()[0], name.rsplit(None, 1)[0]))
         for name, alias in self.data["counselors"].items():
             pairs.append((alias, name))
@@ -290,12 +363,7 @@ def page_words(page):
 
 
 def band_cluster(words, tol=BAND_TOL):
-    """Group words into horizontal text rows by y-center proximity.
-
-    Detached blocks (Address/Parent values extracted as separate blocks) land
-    in the same band as their label as long as their baseline is within tol —
-    this is what makes the harvest independent of PyMuPDF's line structure.
-    """
+    """Group words into horizontal text rows by y-center proximity."""
     bands = []
     for w in sorted(words, key=lambda w: (w.yc, w.x0)):
         if bands and abs(w.yc - bands[-1][0].yc) <= tol:
@@ -338,43 +406,81 @@ def _find_labels(tokens):
     return out
 
 
+def _is_course_anchor(band):
+    return any(w.text == "Course" and w.x0 < 20 for w in band)
+
+
+def _forward_value(bands, band_labels, band_idx):
+    """Walk forward from a band to collect a detached or wrapped value.
+
+    Unlike a fixed point-distance window, this walks row by row until it
+    hits a real structural boundary: another label (any key), the course
+    table's 'Course' anchor, the header column running out (no more
+    left-column words), or a generous row cap — never a guessed pixel
+    tolerance that can silently undershoot a value sitting one row further
+    down, or a value that legitimately wraps onto a second physical line.
+    """
+    collected = []
+    for bi in range(band_idx + 1, min(len(bands), band_idx + 1 + DETACHED_MAX_BANDS)):
+        band = bands[bi]
+        if band_labels[bi] or _is_course_anchor(band):
+            break
+        left_words = [w for w in band if w.x0 < COLUMN_SPLIT_X]
+        if not left_words:
+            break
+        collected.extend(left_words)
+    return collected
+
+
 def harvest_page(words):
     """Extract PII fields from one page's words.
 
     Returns dict: field -> {"value": str, "words": [W]}; plus "_labels" with
-    the label spans found (for the harvest floor + detached search).
+    the label spans found (for the harvest floor + field-presence checks).
     """
     bands = band_cluster(words)
+    band_labels = [_find_labels(b) for b in bands]
     fields = {}
     label_spans = []
 
-    for band in bands:
-        labels = _find_labels(band)
+    for bi, band in enumerate(bands):
+        labels = band_labels[bi]
+        blank_pii = []   # [(key, label_last_word)] needing forward resolution
         for n, (key, start, end) in enumerate(labels):
             label_spans.append((key, band[start], band[end - 1]))
             if key not in PII_LABELS:
                 continue
             stop = labels[n + 1][1] if n + 1 < len(labels) else len(band)
-            value_words = band[end:stop]
+            same_row = list(band[end:stop])
             if key == "name_id":
-                fields["name_id"] = _parse_name_id(value_words)
+                fields["name_id"] = _parse_name_id(same_row)
             elif key == "phone":
-                tok = next((w for w in value_words if RE_PHONE.match(w.text)), None)
+                tok = next((w for w in same_row if RE_PHONE.match(w.text)), None)
                 if tok:
                     fields["phone"] = {"value": tok.text, "words": [tok]}
             elif key == "dob":
-                tok = next((w for w in value_words if RE_DATE.match(w.text)), None)
+                tok = next((w for w in same_row if RE_DATE.match(w.text)), None)
                 if tok:
                     fields["dob"] = {"value": tok.text, "words": [tok]}
             elif key in ("address", "parent", "counselor"):
-                if value_words:
-                    fields[key] = {"value": " ".join(w.text for w in value_words),
-                                   "words": list(value_words)}
+                if same_row:
+                    fields[key] = {"value": " ".join(w.text for w in same_row),
+                                   "words": same_row}
                 else:
-                    # detached-block fallback: widen the y window
-                    det = _detached_value(words, band[end - 1], label_spans)
-                    if det:
-                        fields[key] = det
+                    blank_pii.append((key, band[end - 1]))
+        if blank_pii:
+            # A row can hold more than one blank label (e.g. 'Parent:' and
+            # an empty 'Counselor :' side by side) — the SAME forward
+            # content must not be handed to every one of them. Compute it
+            # once for the row and assign it only to whichever blank
+            # label's x-position is closest to where the content starts
+            # (values are visually indented near their own label).
+            forward = _forward_value(bands, band_labels, bi)
+            if forward:
+                content_x0 = forward[0].x0
+                key, _lw = min(blank_pii, key=lambda kl: abs(kl[1].x0 - content_x0))
+                fields[key] = {"value": " ".join(w.text for w in forward),
+                               "words": forward}
     fields["_labels"] = label_spans
     return fields
 
@@ -393,26 +499,40 @@ def _parse_name_id(value_words):
             "id": id_tok.text, "id_word": id_tok}
 
 
-def _detached_value(words, label_last_word, label_spans):
-    """Value words for a label whose value extracted as a detached block.
+def harvest_nonpii(words):
+    """Non-PII header fields, for the pre/post-redaction comparison check."""
+    bands = band_cluster(words)
+    band_labels = [_find_labels(b) for b in bands]
+    out = {}
+    for bi, band in enumerate(bands):
+        labels = band_labels[bi]
+        for n, (key, start, end) in enumerate(labels):
+            if key not in NONPII_COMPARE_KEYS:
+                continue
+            stop = labels[n + 1][1] if n + 1 < len(labels) else len(band)
+            out.setdefault(key, []).append(
+                " ".join(w.text for w in band[end:stop]))
+    return out
 
-    Search the whole page for words vertically near the label row and to its
-    right, stopping at the first other label sequence.
+
+def field_stats(page_infos):
+    """Per-field populated/blank counts across the document, for the report.
+
+    Address/Counselor are documented as legitimately blank on many pages
+    (handoff §2), so an empty harvest is not itself a failure — but it must
+    never be silent. This makes every field's coverage visible in every
+    run's report so a suspicious pattern (e.g. phone blank on all pages)
+    is something the user can see and investigate, honoring the 'harvest
+    floor' philosophy for fields beyond Name/ID without hard-failing on
+    values the spec says are normally absent.
     """
-    ly = label_last_word.yc
-    lx = label_last_word.x1
-    cand = [w for w in words
-            if abs(w.yc - ly) <= DETACHED_TOL and w.x0 >= lx - 2.0
-            and not (w.x0 <= label_last_word.x0 and w.x1 >= label_last_word.x1
-                     and abs(w.yc - ly) < 1.0)]
-    cand.sort(key=lambda w: w.x0)
-    labels = _find_labels(cand)
-    if labels:
-        cand = cand[:labels[0][1]]
-    cand = [w for w in cand if w.text != ":"]
-    if not cand:
-        return None
-    return {"value": " ".join(w.text for w in cand), "words": cand}
+    lines = []
+    for key in ("dob", "phone", "address", "parent", "counselor"):
+        labeled = sum(1 for i in page_infos if key in i["labels_seen"])
+        populated = sum(1 for i in page_infos if i.get("fields_seen", {}).get(key))
+        lines.append("field '%s': %d/%d labeled pages populated"
+                     % (key, populated, labeled))
+    return lines
 
 
 # --------------------------------------------------------------------------
@@ -440,6 +560,13 @@ def _is_course_row(tokens):
     """Course rows start 'YYYY / T' and end (somewhere) with d.dd/d.dd."""
     return (len(tokens) >= 6 and RE_YEAR.match(tokens[0].text)
             and tokens[1].text == "/" and tokens[2].text.isdigit())
+
+
+def _row_starts_new_record(tokens):
+    """True if tokens open a NEW course or exam row ('YYYY / T' / 'YYYY Term')."""
+    if len(tokens) < 2 or not RE_YEAR.match(tokens[0].text):
+        return False
+    return tokens[1].text in ("/", "Term")
 
 
 def segment_course_row(tokens):
@@ -492,11 +619,27 @@ def segment_course_row(tokens):
 
 
 def logical_rows(words):
-    """Token rows for course parsing: y-bands split at the column boundary."""
+    """Token rows for course parsing: y-bands split at the column boundary.
+
+    A band is only split into independent left/right rows when BOTH sides
+    look like independent content. If the left side looks like the START
+    of a course row (a long course name/teacher whose trailing credits
+    token happens to land at x>=304) but is missing its credits anchor,
+    and the right side does not itself start a new course/exam record,
+    the split was purely an artifact of one row's tail crossing the
+    column boundary — merge it back into a single row instead of silently
+    dropping the teacher redaction on the left fragment and discarding an
+    orphaned '1.00/1.00' on the right.
+    """
     rows = []
     for band in band_cluster(words):
         left = [w for w in band if w.x0 < COLUMN_SPLIT_X]
         right = [w for w in band if w.x0 >= COLUMN_SPLIT_X]
+        if (left and right and _is_course_row(left)
+                and not any(RE_CREDITS.match(w.text) for w in left)
+                and not _row_starts_new_record(right)):
+            rows.append(left + right)
+            continue
         for part in (left, right):
             if part:
                 rows.append(part)
@@ -539,6 +682,11 @@ def _rects_overlap(a, b):
     return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
 
 
+def _rect_contains(outer, inner, pad=0.75):
+    return (outer[0] - pad <= inner[0] and outer[1] - pad <= inner[1]
+            and outer[2] + pad >= inner[2] and outer[3] + pad >= inner[3])
+
+
 def _inset(rect):
     """Shrink a redaction rect so it cannot clip neighboring lines.
 
@@ -560,10 +708,11 @@ def plan_page(page_no, words, mapping, log):
     the verification report.
     """
     fields = harvest_page(words)
+    labels_seen = {k for k, _, _ in fields["_labels"]}
     info = {"page": page_no,
-            "has_name_label": any(k == "name_id" for k, _, _ in fields["_labels"]),
-            "osis": None, "alias_name": None, "alias_id": None,
-            "permissive_rows": []}
+            "has_name_label": "name_id" in labels_seen,
+            "labels_seen": labels_seen, "fields_seen": {},
+            "osis": None, "aliases": {}, "permissive_rows": []}
     red = []
 
     ni = fields.get("name_id")
@@ -571,16 +720,23 @@ def plan_page(page_no, words, mapping, log):
         extra = {k: fields[k]["value"] for k in
                  ("dob", "phone", "address", "parent", "counselor") if k in fields}
         rec, al = mapping.student(ni["id"], ni["value"], extra)
-        info["osis"], info["alias_name"], info["alias_id"] = ni["id"], al["name"], al["id"]
+        info["osis"] = ni["id"]
         # One combined redaction for "NAME / ID": short real names would not
         # leave enough width to draw the alias before the '/' otherwise.
+        name_id_alias = "%s / %s" % (al["name"], al["id"])
+        info["aliases"]["name_id"] = name_id_alias
         red.append(Redaction(union_rect(ni["words"] + [ni["id_word"]]),
-                             "%s / %s" % (al["name"], al["id"]), "name_id"))
+                             name_id_alias, "name_id"))
         for key in ("dob", "phone", "address", "parent"):
             if key in fields:
-                red.append(Redaction(union_rect(fields[key]["words"]), al[key], key))
+                info["fields_seen"][key] = True
+                info["aliases"][key] = al[key]
+                red.append(Redaction(union_rect(fields[key]["words"]),
+                                     al[key], key))
         if "counselor" in fields:
+            info["fields_seen"]["counselor"] = True
             alias = mapping.counselor(fields["counselor"]["value"])
+            info["aliases"]["counselor"] = alias
             red.append(Redaction(union_rect(fields["counselor"]["words"]),
                                  alias, "counselor"))
     elif info["has_name_label"]:
@@ -594,57 +750,82 @@ def plan_page(page_no, words, mapping, log):
             red.append(Redaction(union_rect(seg["teacher"]), alias, "teacher"))
             if seg["permissive"]:
                 info["permissive_rows"].append(
-                    "page %d: no mark anchor; permissively redacted %r in row %r"
-                    % (page_no, tname, " ".join(
-                        w.text for w in (seg["name"] + seg["teacher"]))))
+                    "page %d: no mark anchor; permissively redacted a "
+                    "%d-token span in a course row (name masked: %s...)"
+                    % (page_no, len(seg["teacher"]), tname[:1] + "*" * (len(tname) - 1)))
     return red, info
+
+
+def _room_bound(rect, words, exclude_rects, page_width):
+    """How far right of rect a replacement may extend before hitting the
+    next surviving word (or the page edge).
+
+    This bound is used for BOTH the redaction rect AND the alias draw so
+    they always agree: an earlier version redacted only the original
+    word's own (narrow) box, then drew a WIDER alias into the gap that
+    followed it. That gap still held the original inter-word space
+    glyph(s) (PyMuPDF lays out real space characters with their own
+    bounding boxes), which PyMuPDF's own word extraction ignored but a
+    position-based extractor (pdfplumber, used by the downstream Excel
+    pipeline) treated as a genuine word-break sitting INSIDE the visually
+    intact alias — splitting e.g. 'TCH008' into 'TCH00' + '8'. Redacting
+    through to the same boundary the draw uses removes that leftover
+    glyph regardless of how much wider the alias turns out to be.
+    """
+    x0, y0, x1, y1 = rect
+    yc = (y0 + y1) / 2
+    obstacles = [w.x0 for w in words
+                 if w.x0 > x1 - 0.5 and abs(w.yc - yc) < BAND_TOL
+                 and not any(_rects_overlap((w.x0, w.y0, w.x1, w.y1), rr)
+                             for rr in exclude_rects)]
+    if obstacles:
+        return min(obstacles) - 1.0
+    return min(x1 + 80.0, page_width - 6.0)
 
 
 def apply_redactions(doc, plans, log):
     """Redact (text removal) then draw aliases with a font-size fit loop.
 
-    Aliases are drawn with insert_textbox after apply_redactions so that the
+    Aliases are drawn with insert_text after apply_redactions so that the
     replacement text is never silently clipped: if an alias cannot be drawn
-    even at the minimum font size the run FAILs later (alias-presence check).
+    even at the minimum font size an ERROR is logged AND the specific
+    field/page is recorded as an unfilled alias — the alias-presence check
+    in verify() then fails the run for every PII kind, not just name/ID.
     """
     import fitz
     for page, reds, words in plans:
         if not reds:
             continue
-        for r in reds:
-            page.add_redact_annot(fitz.Rect(*_inset(r.rect)))
+        orig_rects = [r.rect for r in reds]
+        room_bounds = [_room_bound(r.rect, words, orig_rects, page.rect.width)
+                       for r in reds]
+        for r, x1 in zip(reds, room_bounds):
+            x0, y0, _, y1 = r.rect
+            page.add_redact_annot(fitz.Rect(*_inset((x0, y0, x1, y1))))
         try:
             page.apply_redactions(graphics=0)
         except TypeError:                      # older PyMuPDF signature
             page.apply_redactions()
-        redacted = [r.rect for r in reds]
-        for r in reds:
-            _draw_alias(page, r, words, redacted, log)
+        for r, x1 in zip(reds, room_bounds):
+            _draw_alias(page, r, x1, log)
 
 
-def _draw_alias(page, red, words, redacted_rects, log):
+def _draw_alias(page, red, max_x1, log):
     """Draw the alias at the redacted value's baseline, shrinking to fit.
 
-    Room extends rightward to the next SURVIVING word on the text row (or
-    the page edge), so a short redacted value never forces a clipped alias.
     If nothing fits even at 4pt, log an ERROR — the alias-presence check in
-    verify() then fails the run rather than shipping a nameless page.
+    verify() then fails the run rather than shipping a blank field.
     """
     import fitz
     x0, y0, x1, y1 = red.rect
-    yc = (y0 + y1) / 2
-    obstacles = [w.x0 for w in words
-                 if w.x0 > x1 + 1 and abs(w.yc - yc) < BAND_TOL
-                 and not any(_rects_overlap((w.x0, w.y0, w.x1, w.y1), rr)
-                             for rr in redacted_rects)]
-    max_x1 = min(obstacles) - 1.0 if obstacles else page.rect.width - 6.0
     room = max_x1 - x0
     for fs in (8.0, 7.0, 6.0, 5.0, 4.0):
         if fitz.get_text_length(red.alias, fontname="helv", fontsize=fs) <= room:
             page.insert_text((x0, y1 - 1.2), red.alias, fontsize=fs,
                              fontname="helv")
             return
-    log.append("ERROR: alias %r does not fit at %s" % (red.alias, red.rect))
+    log.append("ERROR: alias for kind=%r does not fit at %s (drawn nothing "
+              "at this position)" % (red.kind, red.rect))
 
 
 # --------------------------------------------------------------------------
@@ -656,8 +837,25 @@ def _tolerant_pattern(value):
     return re.compile(r"\s+".join(re.escape(t) for t in value.split()))
 
 
+def _mask(value, keep=1):
+    """Report-safe rendering of a real value: never print it verbatim.
+
+    Verification-failure reports are exactly what a user is likely to paste
+    into a support request when a run FAILs — they must not themselves leak
+    the PII the tool exists to protect.
+    """
+    if not value:
+        return value
+    return value[:keep] + "*" * max(0, len(value) - keep)
+
+
+_SURNAME = r"[^\W\d_][^\W\d_\-'’]*(?:[\-'’][^\W\d_]+)*"   # min 2 chars
+_GIVEN = r"[^\W\d_][^\W\d_\-'’]*\.?"                          # min 1 char
 RE_SCAN_NAME = re.compile(
-    r"\b[A-Z][A-Z\-']{2,}(?: [A-Z][A-Z\-']+)*,\s+[A-Z][A-Z\-']+\b")
+    r"\b%s(?: %s)*,\s+%s\b" % (_SURNAME, _SURNAME, _GIVEN))
+# 'First Last' mixed-case order (documented real Parent shape): 2-4
+# consecutive Title-Case words, no comma required.
+RE_SCAN_NAME_TITLE = re.compile(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+){1,3}\b")
 RE_SCAN_DATE = re.compile(r"\b\d{2}/\d{2}/((?:19|20)\d{2})\b")
 RE_SCAN_ID9 = re.compile(r"\b\d{9}\b")
 RE_SCAN_ID10 = re.compile(r"\b\d{10}\b")
@@ -667,6 +865,18 @@ RE_SCAN_STREET = re.compile(
     r"LN|LANE|DR|DRIVE|PKWY|PARKWAY|TER|TERRACE|WAY|LOOP)\b")
 RE_SCAN_ZIP = re.compile(r"\b1[01]\d{3}(?:-\d{4})?\b")
 RE_ALIAS_NAMEISH = re.compile(r"^P?L\d{3}XX, P?F\d{3}XX$")
+# Any alias-SHAPED token, across every namespace — used as the residual
+# check on restore output (an alias that survives restore, whatever the
+# reason, is a data-quality bug the user must see, not a silent gap).
+RE_ANY_ALIAS_SHAPE = re.compile(
+    r"\bP?L\d{3}XX\b|\bP?F\d{3}XX\b|\bTCH\d{3}(?: [A-Za-z])?\b|"
+    r"\bC\d{2}CNSL\b|\bADDR\d{3}X\b|\b[89]\d{8,9}\b")
+
+
+def _scrub_builtin(text):
+    for p in BUILTIN_NONPII_PHRASES:
+        text = text.replace(p, " " * len(p))
+    return text
 
 
 def verify(anon_path, mapping, page_infos, allow_patterns, log):
@@ -676,31 +886,48 @@ def verify(anon_path, mapping, page_infos, allow_patterns, log):
 
     doc = fitz.open(anon_path)
     texts = [p.get_text() for p in doc]
+    metadata = dict(doc.metadata or {})
+    toc_titles = [t[1] for t in doc.get_toc()]
     doc.close()
     full = "\n".join(texts)
 
-    # (1) Residual scan for every known real value (whole file, all pages).
+    # (1) Residual scan for every known real value (whole file, all pages),
+    #     including PDF metadata/bookmarks (Title/Author/Subject/Keywords,
+    #     outline entries) — a redaction pass that only touches page text
+    #     would otherwise ship real PII in the Info dictionary untouched.
+    #     A case-INSENSITIVE hit is also a FAIL, not a warning: a value the
+    #     tool has positively identified as real PII is not an ambiguity
+    #     just because its capitalization differs somewhere in the file.
     for value in mapping.all_real_values():
         pat = _tolerant_pattern(value)
+        ipat = re.compile(pat.pattern, re.IGNORECASE)
         for pno, text in enumerate(texts, 1):
             if pat.search(text):
-                failures.append("page %d: real value still present (%d chars, "
-                                "starts %r)" % (pno, len(value), value[:2]))
-            elif re.search(pat.pattern, text, re.IGNORECASE):
-                warnings.append("page %d: case-variant of a real value present"
-                                % pno)
+                failures.append("page %d: real value still present (masked: %s)"
+                                % (pno, _mask(value)))
+            elif ipat.search(text):
+                failures.append("page %d: case-variant of a real value present "
+                                "(masked: %s)" % (pno, _mask(value)))
+        for field, mval in metadata.items():
+            if mval and (pat.search(str(mval)) or ipat.search(str(mval))):
+                failures.append("metadata field %r still contains a real "
+                                "value (masked: %s)" % (field, _mask(value)))
+        for title in toc_titles:
+            if pat.search(title) or ipat.search(title):
+                failures.append("bookmark/outline title still contains a "
+                                "real value (masked: %s)" % _mask(value))
 
-    # (2) Alias presence: every harvested student page must show its aliases,
-    #     otherwise the redaction dropped text the downstream parser needs.
+    # (2) Alias presence: every PII field harvested on a page must show its
+    #     alias in the output — covers name/ID AND dob/phone/address/
+    #     parent/counselor, so a font-fit failure on any of them fails the
+    #     run instead of silently shipping a blank field under a PASS.
     for info in page_infos:
-        if info["alias_name"]:
+        for kind, alias in info["aliases"].items():
             text = texts[info["page"] - 1]
-            if not _tolerant_pattern(info["alias_name"]).search(text):
-                failures.append("page %d: alias name %r missing from output"
-                                % (info["page"], info["alias_name"]))
-            if info["alias_id"] not in text:
-                failures.append("page %d: alias ID %s missing from output"
-                                % (info["page"], info["alias_id"]))
+            if not _tolerant_pattern(alias).search(text):
+                failures.append("page %d: alias for %s missing from output "
+                                "(redaction may not have drawn)"
+                                % (info["page"], kind))
 
     # (3) Pattern-class scan (§5.3): shapes, not just known values.
     alias_ids = mapping.alias_id_set()
@@ -708,14 +935,20 @@ def verify(anon_path, mapping, page_infos, allow_patterns, log):
     alias_dobs = mapping.alias_dob_set()
     cur_year = datetime.date.today().year
     for pno, text in enumerate(texts, 1):
-        for m in RE_SCAN_NAME.finditer(text):
+        scrubbed = _scrub_builtin(text)
+        for m in RE_SCAN_NAME.finditer(scrubbed):
             s = m.group(0)
-            if RE_ALIAS_NAMEISH.match(s):
+            if RE_ALIAS_NAMEISH.match(s) or s.strip() in allow_patterns:
                 continue
-            if any(a in s for a in allow_patterns):
+            failures.append("page %d: 'LAST, FIRST'-shaped string outside "
+                            "the alias namespace (masked: %s)"
+                            % (pno, _mask(s)))
+        for m in RE_SCAN_NAME_TITLE.finditer(scrubbed):
+            s = m.group(0)
+            if s.strip() in allow_patterns:
                 continue
-            failures.append("page %d: 'LAST, FIRST'-shaped string outside the "
-                            "alias namespace: %r" % (pno, s))
+            failures.append("page %d: Title-Case 'First Last'-shaped string "
+                            "(masked: %s)" % (pno, _mask(s)))
         for m in RE_SCAN_DATE.finditer(text):
             year = int(m.group(1))
             if m.group(0) in alias_dobs:
@@ -735,10 +968,11 @@ def verify(anon_path, mapping, page_infos, allow_patterns, log):
             if m.group(0) not in alias_phones:
                 failures.append("page %d: 10-digit number %s outside synthetic "
                                 "range" % (pno, m.group(0)))
-        for m in RE_SCAN_STREET.finditer(text):
-            if not any(a in m.group(0) for a in allow_patterns):
-                failures.append("page %d: street-address-shaped string: %r"
-                                % (pno, m.group(0)))
+        for m in RE_SCAN_STREET.finditer(scrubbed):
+            if m.group(0).strip() in allow_patterns:
+                continue
+            failures.append("page %d: street-address-shaped string (masked: "
+                            "%s)" % (pno, _mask(m.group(0))))
         for m in RE_SCAN_ZIP.finditer(text):
             warnings.append("page %d: NYC-zip-shaped number %s (single-token "
                             "coincidence?)" % (pno, m.group(0)))
@@ -831,6 +1065,24 @@ def compare_course_data(orig_doc, anon_doc, mapping, log):
     return failures
 
 
+def compare_header_fields(orig_doc, anon_doc, log):
+    """Invariant (c) for the header: non-PII fields must survive redaction
+    byte-identically. This is exactly the failure class _inset() exists
+    for (a redaction once silently deleted a neighboring 'Ofcl :' value in
+    testing) — generalized into a real per-run guarantee instead of only
+    being checked by the synthetic test suite.
+    """
+    failures = []
+    for pno in range(min(len(orig_doc), len(anon_doc))):
+        oh = harvest_nonpii(page_words(orig_doc[pno]))
+        ah = harvest_nonpii(page_words(anon_doc[pno]))
+        for key in NONPII_COMPARE_KEYS:
+            if oh.get(key) != ah.get(key):
+                failures.append("page %d: non-PII field %r changed after "
+                                "anonymization" % (pno + 1, key))
+    return failures
+
+
 # --------------------------------------------------------------------------
 # Section 7 — anonymize driver
 # --------------------------------------------------------------------------
@@ -842,7 +1094,14 @@ def default_mapping_path():
 
 def anonymize_pdf(pdf_path, mapping_path=None, expect_students=None,
                   allow_patterns=(), report_path=None):
-    """Full pipeline. Returns (ok, out_path, report_lines)."""
+    """Full pipeline. Returns (ok, out_path, report_lines).
+
+    Output is written under a '.partial' name first and only renamed to
+    the clean '_ANON.pdf' name after every check has PASSed; any exception
+    (including Ctrl-C) during redaction/verification leaves either nothing
+    or an '_ANON_FAILED.pdf'-suffixed file on disk — never a file under the
+    clean name that has not actually been verified.
+    """
     import fitz
     log = []
     mapping = Mapping(mapping_path or default_mapping_path())
@@ -857,9 +1116,13 @@ def anonymize_pdf(pdf_path, mapping_path=None, expect_students=None,
         log.extend(info["permissive_rows"])
 
     failures, n_students = check_floor(page_infos, expect_students, log)
+    log.extend(field_stats(page_infos))
 
     base, _ = os.path.splitext(pdf_path)
-    out_path = base + "_ANON.pdf"
+    final_pass_path = base + "_ANON.pdf"
+    final_fail_path = base + "_ANON_FAILED.pdf"
+    work_path = base + "_ANON.pdf.partial"
+
     if failures:
         # Hard FAIL before writing anything uploadable.
         report = _report(pdf_path, None, False, failures, [], log, n_students)
@@ -867,31 +1130,53 @@ def anonymize_pdf(pdf_path, mapping_path=None, expect_students=None,
         doc.close()
         return False, None, report
 
-    apply_redactions(doc, plans, log)
-    doc.save(out_path, garbage=3, deflate=True)
+    ok = False
+    vwarn = []
+    out_path = None
+    try:
+        apply_redactions(doc, plans, log)
+        doc.save(work_path, garbage=3, deflate=True)
+        doc.close()
 
-    ok, vfail, vwarn = verify(out_path, mapping, page_infos,
-                              list(allow_patterns), log)
-    orig = fitz.open(pdf_path)
-    anon = fitz.open(out_path)
-    cfail = compare_course_data(orig, anon, mapping, log)
-    orig.close()
-    anon.close()
-    if cfail:
+        ok, vfail, vwarn = verify(work_path, mapping, page_infos,
+                                  list(allow_patterns), log)
+        orig = fitz.open(pdf_path)
+        anon = fitz.open(work_path)
+        cfail = compare_course_data(orig, anon, mapping, log)
+        hfail = compare_header_fields(orig, anon, log)
+        orig.close()
+        anon.close()
+        if cfail or hfail:
+            ok = False
+        failures = vfail + cfail + hfail
+    except (KeyboardInterrupt, SystemExit):
         ok = False
-    failures = vfail + cfail
+        failures = failures + ["interrupted before verification completed"]
+        raise
+    except Exception as exc:
+        ok = False
+        failures = failures + ["EXCEPTION during anonymization: %s: %s"
+                               % (type(exc).__name__, exc)]
+    finally:
+        try:
+            if not doc.is_closed:
+                doc.close()
+        except Exception:
+            pass
+        if os.path.exists(work_path):
+            if ok:
+                os.replace(work_path, final_pass_path)
+                out_path = final_pass_path
+            else:
+                os.replace(work_path, final_fail_path)
+                out_path = final_fail_path
+        n_red = sum(len(r) for _, r, _ in plans)
+        log.append("redactions placed: %d" % n_red)
+        report = _report(pdf_path, out_path, ok, failures, vwarn, log, n_students)
+        _write_report(report_path or base + "_ANON_report.txt", report)
+        if ok:
+            mapping.save()
 
-    if not ok:
-        failed_path = base + "_ANON_FAILED.pdf"
-        os.replace(out_path, failed_path)
-        out_path = failed_path
-    else:
-        mapping.save()
-
-    n_red = sum(len(r) for _, r, _ in plans)
-    log.append("redactions placed: %d" % n_red)
-    report = _report(pdf_path, out_path, ok, failures, vwarn, log, n_students)
-    _write_report(report_path or base + "_ANON_report.txt", report)
     return ok, out_path, report
 
 
@@ -927,7 +1212,10 @@ def _build_restorer(mapping):
     pairs = mapping.reverse_pairs()
     if not pairs:
         raise SystemExit("mapping is empty — nothing to restore")
-    pat = re.compile("|".join(re.escape(a) for a, _ in pairs))
+    # \b-anchored: an earlier version matched alias substrings anywhere,
+    # so a 9-digit ID alias could match inside an unrelated longer number
+    # (a computed value, a timestamp) and corrupt it.
+    pat = re.compile("|".join(r"\b%s\b" % re.escape(a) for a, _ in pairs))
     table = dict(pairs)
     return pat, table
 
@@ -936,32 +1224,110 @@ def restore_text(text, pat, table):
     return pat.sub(lambda m: table[m.group(0)], text)
 
 
+def _residual_alias_hits(text):
+    return sorted(set(RE_ANY_ALIAS_SHAPE.findall(text)))
+
+
 def restore_file(path, mapping_path=None):
-    """Restore real values into a returned txt/csv/xlsx/pdf. -> new path."""
+    """Restore real values into a returned txt/csv/xlsx/pdf.
+
+    Returns (out_path, issues). issues is a list of human-readable strings
+    covering BOTH failure classes the restore direction can hit silently:
+    an alias-shaped token still present afterward (didn't match — stale
+    mapping, case mismatch, or format the tool doesn't parse), and — PDF
+    only — a real value that could not be DRAWN because it didn't fit in
+    the space the alias occupied, which leaves neither the alias nor the
+    real value on the page. An empty list means a clean restore; callers
+    (CLI/GUI) must surface a non-empty list prominently, not bury it in a
+    log stream, since this is exactly the moment a user might miss that
+    part of their document silently didn't come back.
+    """
     mapping = Mapping(mapping_path or default_mapping_path())
     pat, table = _build_restorer(mapping)
     base, ext = os.path.splitext(path)
     out = base + "_RESTORED" + ext
-    ext = ext.lower()
-    if ext in (".txt", ".csv", ".md", ".json", ".tsv"):
+    ext_l = ext.lower()
+    if ext_l in (".txt", ".md", ".json", ".tsv"):
         with open(path, "r", encoding="utf-8", errors="surrogateescape") as fh:
             data = fh.read()
+        restored = restore_text(data, pat, table)
         with open(out, "w", encoding="utf-8", errors="surrogateescape") as fh:
-            fh.write(restore_text(data, pat, table))
-    elif ext == ".xlsx":
-        import openpyxl                      # cell-by-cell (§6): never via LLM
-        wb = openpyxl.load_workbook(path)
-        for ws in wb.worksheets:
-            for row in ws.iter_rows():
-                for cell in row:
-                    if isinstance(cell.value, str) and pat.search(cell.value):
-                        cell.value = restore_text(cell.value, pat, table)
-        wb.save(out)
-    elif ext == ".pdf":
-        out = _restore_pdf(path, out, pat, table)
+            fh.write(restored)
+        issues = _residual_issues(_residual_alias_hits(restored))
+    elif ext_l == ".csv":
+        issues = _restore_csv(path, out, pat, table)
+    elif ext_l == ".xlsx":
+        issues = _restore_xlsx(path, out, pat, table)
+    elif ext_l == ".pdf":
+        out, issues = _restore_pdf(path, out, pat, table)
     else:
         raise SystemExit("don't know how to restore %r files" % ext)
-    return out
+    return out, issues
+
+
+def _residual_alias_hits(text):
+    return sorted(set(RE_ANY_ALIAS_SHAPE.findall(text)))
+
+
+def _residual_issues(hits):
+    if not hits:
+        return []
+    return ["%d alias-shaped token(s) remain after restore (stale mapping, "
+           "case mismatch, or an unsupported cell format?): %s"
+           % (len(hits), hits[:8])]
+
+
+def _restore_csv(path, out, pat, table):
+    """CSV-aware: substitute per cell, then re-serialize with quoting.
+
+    A plain text substitution would insert an unquoted comma wherever an
+    alias restores to a comma-bearing real value ('LAST, FIRST' names,
+    'C01CNSL' -> a counselor string), shifting every later column. Reading
+    and re-writing through the csv module lets the writer quote any field
+    that now needs it.
+    """
+    with open(path, "r", newline="", encoding="utf-8", errors="surrogateescape") as fh:
+        rows = list(csv.reader(fh))
+    restored_rows = [[restore_text(cell, pat, table) for cell in row] for row in rows]
+    with open(out, "w", newline="", encoding="utf-8", errors="surrogateescape") as fh:
+        csv.writer(fh).writerows(restored_rows)
+    flat = "\n".join(",".join(r) for r in restored_rows)
+    return _residual_issues(_residual_alias_hits(flat))
+
+
+def _restore_xlsx(path, out, pat, table):
+    """Cell-by-cell (§6): never via LLM. Handles non-string cell types —
+    spreadsheet writers (pandas/Excel/openpyxl) commonly store all-digit
+    alias IDs/phones as numbers and DOB aliases as dates, not strings; a
+    string-only restore silently left those untouched.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(path)
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if v is None or isinstance(v, bool):
+                    continue
+                if isinstance(v, str):
+                    if pat.search(v):
+                        cell.value = restore_text(v, pat, table)
+                elif isinstance(v, (int, float)):
+                    s = str(int(v)) if float(v).is_integer() else str(v)
+                    if s in table:
+                        cell.value = table[s]
+                elif isinstance(v, (datetime.date, datetime.datetime)):
+                    s = v.strftime("%m/%d/%Y")
+                    if s in table:
+                        cell.value = table[s]
+    wb.save(out)
+    hits = []
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str):
+                    hits.extend(RE_ANY_ALIAS_SHAPE.findall(cell.value))
+    return _residual_issues(sorted(set(hits)))
 
 
 def _restore_pdf(path, out, pat, table):
@@ -973,25 +1339,42 @@ def _restore_pdf(path, out, pat, table):
         hits = []
         for alias, real in sorted(table.items(), key=lambda p: -len(p[0])):
             for rect in page.search_for(alias):
-                if any(_rects_overlap(tuple(rect), h[0]) for h in hits):
-                    continue                  # longer alias already claimed it
-                hits.append((tuple(rect), real))
+                r = tuple(rect)
+                # Skip only if this hit is fully CONTAINED within an
+                # already-claimed (longer) alias's rect — that is a genuine
+                # substring occurrence (e.g. 'L001XX' inside the combined
+                # name/ID block). An any-overlap test (the earlier version)
+                # also fired on adjacent, unrelated lines at normal line
+                # spacing, silently leaving those aliases un-restored.
+                if any(_rect_contains(h[0], r) for h in hits):
+                    continue
+                hits.append((r, real))
         if not hits:
             continue
-        for rect, _ in hits:
-            page.add_redact_annot(fitz.Rect(*_inset(rect)))
+        hit_rects = [h[0] for h in hits]
+        room_bounds = [_room_bound(r, words, hit_rects, page.rect.width)
+                      for r, _ in hits]
+        for (rect, _), x1 in zip(hits, room_bounds):
+            x0, y0, _, y1 = rect
+            page.add_redact_annot(fitz.Rect(*_inset((x0, y0, x1, y1))))
         try:
             page.apply_redactions(graphics=0)
         except TypeError:
             page.apply_redactions()
-        for rect, real in hits:
+        for (rect, real), x1 in zip(hits, room_bounds):
             red = Redaction(rect, real, "restore")
-            _draw_alias(page, red, words, [h[0] for h in hits], log)
+            _draw_alias(page, red, x1, log)
     doc.save(out, garbage=3, deflate=True)
     doc.close()
-    for entry in log:
-        print("  ~ " + entry)
-    return out
+    text = "\n".join(p.get_text() for p in fitz.open(out))
+    issues = [e for e in log if e.startswith("ERROR")]
+    if issues:
+        issues = ["%d real value(s) could not be redrawn (too long for the "
+                  "space the alias occupied) — that student/field is now "
+                  "BLANK, not just aliased, in the restored PDF: %s"
+                  % (len(issues), issues[:4])]
+    issues += _residual_issues(_residual_alias_hits(text))
+    return out, issues
 
 
 # --------------------------------------------------------------------------
@@ -1018,7 +1401,7 @@ def selftest():
             ok = False
 
     print("alias spec:")
-    a1, a2 = student_aliases(1), student_aliases(133)
+    a1, a2, a12 = student_aliases(1), student_aliases(133), student_aliases(12)
     check(a1["name"] == "L001XX, F001XX", "student alias shape")
     check(a1["first"][:5] != a2["first"][:5], "unique 5-char first-name prefix")
     check(a1["id"] == "900000001" and RE_OSIS.match(a1["id"]), "synthetic OSIS range")
@@ -1028,6 +1411,11 @@ def selftest():
     check(counselor_alias(3).endswith("CNSL"), "counselor CNSL suffix")
     check(not counselor_alias(1).startswith(("F", "L")), "counselor namespace disjoint")
     check(teacher_alias(5) == "TCH005", "teacher alias shape")
+    check(a12["phone"][:9] != a1["id"],
+          "phone alias truncated to 9 digits never equals another student's ID")
+    check(not any(student_aliases(k)["phone"][:9] == student_aliases(j)["id"]
+                  for k in range(1, 200) for j in (k // 10 or 1,)),
+          "no phone/id prefix collision across 1..199")
 
     print("mark classification:")
     for tok, cls in [("85", 1), ("85*", 1), ("100", 1), ("CR*", 1), ("NS*", 1),
@@ -1049,6 +1437,8 @@ def selftest():
         ("2024 / 1 435 SCI41 CHEM LAB NS* 0.00/0.00", "", "NS*", False),
         ("2024 / 1 435 ENG41 ENG 4 90 VARGA-QUINN 1.00/1.00", "VARGA-QUINN", "90", False),
         ("2024 / 1 435 HIS41 GLOBAL HIST 3 88 DE LA CRUZ 1.00/1.00", "DE LA CRUZ", "88", False),
+        ("2024 / 1 435 SES41 CHEM 92 MUÑOZ 1.00/1.00", "MUÑOZ", "92", False),
+        ("2024 / 1 435 SPS41 SPANISH 88 PEÑA 1.00/1.00", "PEÑA", "88", False),
     ]
     for row, t_exp, m_exp, perm in cases:
         seg = segment_course_row(_mk_tokens(row))
@@ -1066,9 +1456,31 @@ def selftest():
     check(segment_course_row(_mk_tokens("2024 Term 1 SXRK ALGEBRA REG 85")) is None,
           "exam line is not a course row")
 
+    print("column-split merge-back:")
+    left = _mk_tokens("2024 / 1 435 EES87 ADVANCED PLACEMENT ENGLISH LIT")
+    for w in left:
+        pass
+    teacher_word = W(295.0, 100.0, 330.0, 108.0, "STRADDLETON")
+    credit_word = W(340.0, 100.0, 372.0, 108.0, "1.00/1.00")
+    band_words = left + [teacher_word, credit_word]
+    rows = logical_rows(band_words)
+    merged = [r for r in rows if any(w.text == "STRADDLETON" for w in r)]
+    check(len(merged) == 1 and any(RE_CREDITS.match(w.text) for w in merged[0]),
+          "row whose credits token crosses x=304 is merged back into one row")
+    seg2 = segment_course_row(merged[0]) if merged else None
+    check(seg2 is not None and "STRADDLETON" in [w.text for w in seg2["teacher"]],
+          "merged cross-boundary row still yields the teacher")
+
     print("pattern-class scanner:")
     check(RE_SCAN_NAME.search("HEADER TESTLAST, TESTFIRST TRAILER"), "LAST, FIRST hit")
     check(not RE_SCAN_NAME.search("L001XX, F001XX"), "alias name not flagged")
+    check(RE_SCAN_NAME.search("NG, KEVIN"), "2-char surname hit")
+    check(RE_SCAN_NAME.search("RIVERA, P"), "single-initial given-name hit")
+    check(RE_SCAN_NAME.search("PEÑA, JOSÉ"), "unicode name hit")
+    check(RE_SCAN_NAME_TITLE.search("see Ramona De La Cruz about"), "Title-Case First-Last hit")
+    check(not RE_SCAN_NAME_TITLE.search(_scrub_builtin("Student Permanent Record")),
+          "builtin boilerplate scrubbed from Title-Case scan")
+    check(not RE_SCAN_NAME_TITLE.search("Page 1 of 2"), "footer not flagged")
     check(RE_SCAN_STREET.search("88 OCEAN VIEW AVE APT"), "street shape hit")
     check(not RE_SCAN_STREET.search("2024 / 1 435 US1 US HIST 3"), "course row not street")
     check(RE_SCAN_ID9.search("212345678"), "9-digit hit")
@@ -1080,20 +1492,36 @@ def selftest():
         "idx": 1, "name": "TESTLAST, TESTFIRST",
         "real": {"dob": "05/12/2008", "phone": "7185550001",
                  "address": "88 FAKE ST NY 11200", "parent": "TESTLAST, PARENTA"}}
+    m.data["students"]["212345679"] = {
+        "idx": 2, "name": "SECONDLAST, SECONDFIRST",
+        "real": {"parent": "Ramona De La Cruz"}}
     m.data["teachers"]["QUINCEY"] = "TCH001"
     m.data["teachers"]["OBRIENZ M"] = "TCH002 M"
     pat, table = _build_restorer(m)
-    src = ("L001XX, F001XX / 900000001 dob 01/01/1900 ph 9000000001 "
-           "addr ADDR001X par PL001XX, PF001XX t TCH001 t2 TCH002 M solo F001XX")
+    src = ("L001XX, F001XX / 900000001 dob 01/01/1900 ph 8000000001 "
+           "addr ADDR001X par PL001XX, PF001XX t TCH001 t2 TCH002 M solo F001XX "
+           "num 1900000001")
     out = restore_text(src, pat, table)
-    check("OBRIENZ M" in out, "teacher alias with initial restored")
     check("TESTLAST, TESTFIRST / 212345678" in out, "name+id restored")
     check("05/12/2008" in out and "7185550001" in out, "dob+phone restored")
     check("88 FAKE ST NY 11200" in out, "address restored")
     check("TESTLAST, PARENTA" in out, "parent restored")
     check("QUINCEY" in out, "teacher restored")
-    check(out.endswith("TESTFIRST"), "bare first-name alias restored")
-    check("XX" not in out and "TCH0" not in out, "zero residual aliases")
+    check("OBRIENZ M" in out, "teacher alias with initial restored")
+    check(out.endswith("num 1900000001"),
+          "digit alias embedded in a longer number is NOT corrupted (\\b anchors)")
+    check(out.split()[3] == "TESTFIRST" or "TESTFIRST" in out.split(),
+          "bare first-name alias restored")
+    check("XX" not in out and "TCH0" not in out.replace("num 1900000001", ""),
+          "zero residual aliases")
+
+    src2 = "please call PF002XX about attendance, ref PL002XX"
+    out2 = restore_text(src2, pat, table)
+    check("please call De La Cruz about attendance" in out2
+          or "please call Ramona De La" in out2,
+          "bare parent given-name alias restores to first-name portion only")
+    check(out2.count(",") == src2.count(","),
+          "bare parent alias does not introduce a new comma")
 
     print("\nselftest: %s" % ("PASS" if ok else "FAIL"))
     return ok
@@ -1117,9 +1545,12 @@ def run_cli(argv):
     ap.add_argument("--mapping", metavar="PATH",
                     help="mapping JSON (default: beside this script)")
     ap.add_argument("--allow-pattern", action="append", default=[],
-                    metavar="SUBSTR",
+                    metavar="EXACT",
                     help="whitelist a legit string for the pattern-class scan "
-                         "(repeatable), e.g. a school name with a comma")
+                         "(repeatable) — must match the FULL flagged string "
+                         "exactly, e.g. a school name; a partial/substring "
+                         "match would silently exempt a real PII hit that "
+                         "merely contains it")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--gui", action="store_true")
     args = ap.parse_args(argv)
@@ -1127,8 +1558,14 @@ def run_cli(argv):
     if args.selftest:
         return 0 if selftest() else 1
     if args.restore:
-        out = restore_file(args.restore, args.mapping)
-        print("restored -> %s" % out)
+        out, issues = restore_file(args.restore, args.mapping)
+        if issues:
+            print("restored -> %s" % out)
+            print("\nWARNING — review before trusting this file:")
+            for issue in issues:
+                print("  ! " + issue)
+            return 1
+        print("restored cleanly -> %s" % out)
         return 0
     if args.input:
         ok, out, report = anonymize_pdf(
@@ -1179,8 +1616,15 @@ def run_gui():
                     "Anonymizer", ("PASS — safe to upload:\n%s" % out) if ok
                     else "FAIL — DO NOT UPLOAD. See report.")
             else:
-                out = restore_file(path)
-                log_lines(["restored -> %s" % out])
+                out, issues = restore_file(path)
+                if issues:
+                    log_lines(["restored -> %s" % out, "WARNING:"] + issues)
+                    messagebox.showwarning(
+                        "Anonymizer", "Restored, but review before trusting "
+                        "this file — see the log for %d issue(s)."
+                        % len(issues))
+                else:
+                    log_lines(["restored cleanly -> %s" % out])
         except Exception as exc:
             messagebox.showerror("Anonymizer", str(exc))
 

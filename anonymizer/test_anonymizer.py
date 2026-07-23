@@ -14,6 +14,8 @@ Exercises the §9 acceptance criteria against the generated fixture:
 Run:  python3 test_anonymizer.py        (needs pymupdf, pdfplumber, openpyxl)
 """
 
+import csv
+import datetime
 import json
 import os
 import re
@@ -266,7 +268,8 @@ def test_restore(tmp, mapping_path):
             % (al1["name"], al1["id"], al1["first"]))
     with open(txt, "w") as fh:
         fh.write(body)
-    out = ra.restore_file(txt, mapping_path)
+    out, issues = ra.restore_file(txt, mapping_path)
+    check(not issues, "txt: clean restore reports no issues")
     restored = open(out).read()
     check(rec1["name"] in restored and "212000001" not in body,
           "txt: real name restored")
@@ -281,11 +284,15 @@ def test_restore(tmp, mapping_path):
     xp = os.path.join(tmp, "analysis.xlsx")
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(["Student Name", "ID", "Note"])
-    ws.append([al1["name"], al1["id"], "flag %s for honors" % al1["first"]])
-    ws.append([ra.student_aliases(8)["name"], ra.student_aliases(8)["id"], ""])
+    ws.append(["Student Name", "ID", "Phone", "DOB", "Note"])
+    ws.append([al1["name"], int(al1["id"]), int(al1["phone"]),
+              datetime.datetime.strptime(al1["dob"], "%m/%d/%Y"),
+              "flag %s for honors" % al1["first"]])
+    al8 = ra.student_aliases(8)
+    ws.append([al8["name"], al8["id"], al8["phone"], al8["dob"], ""])
     wb.save(xp)
-    out = ra.restore_file(xp, mapping_path)
+    out, issues = ra.restore_file(xp, mapping_path)
+    check(not issues, "xlsx: clean restore reports no issues")
     wb2 = openpyxl.load_workbook(out)
     cells = [c.value for row in wb2.active.iter_rows() for c in row if c.value]
     joined = " | ".join(str(c) for c in cells)
@@ -293,15 +300,73 @@ def test_restore(tmp, mapping_path):
           "xlsx: names restored cell-by-cell")
     check("XX" not in joined and "TCH" not in joined,
           "xlsx: zero residual aliases")
+    check(str(rec1["real"]["phone"]) in joined,
+          "xlsx: numeric-typed ID/phone cells restored (not just string cells)")
+    check(rec1["real"]["dob"] in joined,
+          "xlsx: date-typed DOB cell restored")
+
+    csvp = os.path.join(tmp, "analysis.csv")
+    with open(csvp, "w", newline="") as fh:
+        csv.writer(fh).writerow(
+            [al1["name"], al1["id"], al1["parent"].split(", ")[1], "on track"])
+    out, issues = ra.restore_file(csvp, mapping_path)
+    check(not issues, "csv: clean restore reports no issues")
+    with open(out, newline="") as fh:
+        rows = list(csv.reader(fh))
+    check(len(rows) == 1 and len(rows[0]) == 4,
+          "csv: restoring a comma-bearing value does not shift columns "
+          "(row stays 4 fields, %r)" % (rows[0] if rows else None))
+    check(rows[0][0] == rec1["name"] if rows else False,
+          "csv: name cell restored exactly")
 
 
 def test_pdf_restore(tmp, anon_path):
     print("\n[5] pdf restore (spot checks)")
-    out = ra.restore_file(anon_path, os.path.join(tmp, "mapping.json"))
+    out, issues = ra.restore_file(anon_path, os.path.join(tmp, "mapping.json"))
+    # The full fixture deliberately includes names too long to redraw into
+    # their (much shorter) alias's redacted box — a genuine physical PDF
+    # constraint, not a bug. The FIX under test is that this is now
+    # SURFACED as an issue (a caller can't miss it) instead of silently
+    # leaving that student's name blank with a clean-looking return value.
+    check(bool(issues) and "could not be redrawn" in issues[0],
+          "pdf: a too-long-to-refit real name is surfaced as an issue, "
+          "not silently dropped (issues: %r)" % issues)
     text = anon_full_text(out)
     check("AARDWOLF, QUIMBY" in text, "pdf: student name restored")
     check("212000001" in text, "pdf: OSIS restored")
     check("MARLOWE" in text, "pdf: teacher restored")
+
+    # A restore with names short enough to fit must report zero issues —
+    # the surfaced-issue path above must not fire unconditionally.
+    import fitz
+    doc = fitz.open()
+    page = doc.new_page()
+    m = ra.Mapping(os.path.join(tmp, "mapping.json"))
+    a1 = ra.student_aliases(1)
+    page.insert_text((50, 100), "%s / %s" % (a1["name"], a1["id"]), fontsize=10)
+    shortp = os.path.join(tmp, "short.pdf")
+    doc.save(shortp)
+    doc.close()
+    out3, issues3 = ra.restore_file(shortp, os.path.join(tmp, "mapping.json"))
+    check(not issues3, "pdf: a short, fitting name restores with zero issues")
+    check("AARDWOLF, QUIMBY" in anon_full_text(out3),
+          "pdf: short name actually restored")
+
+    # Adjacent-line restore must not skip a hit merely because its rect
+    # overlaps a previously-claimed one at normal line spacing.
+    doc = fitz.open()
+    page = doc.new_page()
+    a2 = ra.student_aliases(2)
+    page.insert_text((50, 100), "%s / %s" % (a1["name"], a1["id"]), fontsize=10)
+    page.insert_text((50, 112), "%s / %s" % (a2["name"], a2["id"]), fontsize=10)
+    adjp = os.path.join(tmp, "adjacent.pdf")
+    doc.save(adjp)
+    doc.close()
+    out2, issues2 = ra.restore_file(adjp, os.path.join(tmp, "mapping.json"))
+    text2 = anon_full_text(out2)
+    check("AARDWOLF, QUIMBY" in text2 and "VARGA-QUINN, BROOKLYN" in text2,
+          "pdf: BOTH adjacent-line aliases restored (containment, not "
+          "any-overlap, gates the substring skip)")
 
 
 def test_determinism(tmp):
@@ -366,6 +431,38 @@ def test_fail_paths(tmp):
     check(not ok, "rogue extra-header occurrence FAILs the run")
     check(out and out.endswith("_ANON_FAILED.pdf") and os.path.exists(out),
           "output quarantined with _ANON_FAILED suffix")
+    joined_report = "\n".join(report)
+    check("ROGUEBERG" not in joined_report and "ZINNIA" not in joined_report,
+          "FAIL report masks the real value instead of quoting it verbatim "
+          "(reports are what a user pastes when asking for help)")
+
+    # (iv) a real value stashed in PDF metadata (Title/Author) must FAIL —
+    # a redaction pass that only touches page text would ship it untouched
+    meta = os.path.join(tmp, "meta.pdf")
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((30, 42), "Student Permanent Record", fontname="cour", fontsize=7)
+    page.insert_text((14, 62), "Name / ID  :  ROGUEBERG, ZINNIA  /  212999998",
+                     fontname="cour", fontsize=7)
+    doc.set_metadata({"title": "Permanent Record - ROGUEBERG, ZINNIA"})
+    doc.save(meta)
+    doc.close()
+    ok, out, report = ra.anonymize_pdf(meta, mapping_path=os.path.join(tmp, "m_meta.json"))
+    check(not ok, "real value in PDF metadata (Title) FAILs the run")
+
+    # (v) a case-variant of a known real value FAILs, not just warns
+    case = os.path.join(tmp, "case.pdf")
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((30, 42), "Student Permanent Record", fontname="cour", fontsize=7)
+    page.insert_text((14, 62), "Name / ID  :  ROGUEBERG, ZINNIA  /  212999997",
+                     fontname="cour", fontsize=7)
+    page.insert_text((14, 200), "see Rogueberg, Zinnia re: schedule",
+                     fontname="cour", fontsize=7)
+    doc.save(case)
+    doc.close()
+    ok, out, report = ra.anonymize_pdf(case, mapping_path=os.path.join(tmp, "m_case.json"))
+    check(not ok, "case-variant of a real value FAILs (not just warns)")
 
 
 def main():

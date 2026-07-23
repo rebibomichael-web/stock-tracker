@@ -2,6 +2,10 @@
 anonymizer_mapping.json
 *mapping*.json
 *_ANON.pdf
+*_ANON.pdf.partial
 *_ANON_FAILED.pdf
 *_ANON_report.txt
 *_RESTORED.*
+# Mapping.save() writes real PII to path+".tmp" before the atomic rename;
+# a crash between write and rename would otherwise strand it ungitignored.
+*.tmp
