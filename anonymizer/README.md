@@ -33,6 +33,20 @@ python3 test_anonymizer.py                              # full E2E on synthetic 
 Always pass `--expect N` when you know the student count (senior export: 133;
 full export: 438) — it becomes a hard check.
 
+### Desktop shortcut (Linux)
+
+On the machine where this repo is cloned:
+
+```bash
+bash anonymizer/install_desktop_shortcut.sh
+```
+
+Adds "NYC DOE Record Anonymizer" to your application menu and, if
+`~/Desktop` exists, a Desktop icon — both launch `run_anonymizer.sh`, which
+opens the drag-and-drop GUI (installing PyMuPDF first if needed). Safe to
+re-run after moving the clone; GNOME/KDE may ask you to trust the Desktop
+launcher once.
+
 ## What gets pseudonymized
 
 Student name + OSIS ID (one combined redaction), DOB, phone, address, parent,
