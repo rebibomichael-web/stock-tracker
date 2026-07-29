@@ -127,12 +127,7 @@
             <div class="column col-backlog">
                 <div class="column-header">
                     <span class="column-title">Backlog</span>
-                    <span class="count">7</span>
-                </div>
-                <div class="card">
-                    <h3>MASTER_LOG / CHANGE_LIST — July backfill (Michael's call)</h3>
-                    <p>Found 07-29 during the Item-46 logging: both system-of-record docs on the Dell <strong>stop at June</strong> (Items 45/47/48/32) — NONE of July is logged. The SYMBOL tab build, R2 treeview render, pill narratives, warm start, P3/P5 canaries, PERFORMANCE tab, pill cards… all live only in the CODE_HANDOFF briefs, Dell session memories, and this board. The Dell wrote the two entries its task required (a pill-card entry as the gold-ratification's home, the Item 46 close-out) and deliberately did NOT backfill the rest — "a bigger call than this ask covers." Michael decides: full July backfill (raw material = session memories + this board's Done column + the mirrored briefs) vs. forward-only discipline from here. Either way, the every-session logging habit needs to resume — two months of unlogged July work is how date errors like the "14 months" slip past review.</p>
-                    <div class="card-tags"><span class="tag tag-infra">infra</span><span class="tag tag-decision">decision</span></div>
+                    <span class="count">6</span>
                 </div>
                 <div class="card">
                     <h3>Phase 2 — risk controls before any capital increase</h3>
@@ -228,7 +223,12 @@
             <div class="column col-progress">
                 <div class="column-header">
                     <span class="column-title">In Progress</span>
-                    <span class="count">4</span>
+                    <span class="count">5</span>
+                </div>
+                <div class="card">
+                    <h3>MASTER_LOG / CHANGE_LIST July backfill — DECIDED: full backfill; authored 07-29, awaiting Dell apply</h3>
+                    <p>Found 07-29 during the Item-46 logging: both system-of-record docs on the Dell <strong>stop at June</strong> (Items 45/47/48/32) — NONE of July was logged; the SYMBOL build, R-series, PERFORMANCE tab, canaries, TZ fixes, cron bugs… lived only in briefs, session memories, and this board. Michael ratified the full backfill. AUTHORED IN THE CLOUD 07-29 (MASTER_LOG_JULY_BACKFILL_20260729): eleven dated MASTER_LOG entries in the house format covering 07-06 → 07-28 (Phase-1 closeout/Barchart/specs cluster · P1+P2 · CRON_TZ finding + warm-start brief · the 07-15 TZ fix + design marathon + import-exits root cause + overnight journal-sync build · 07-17 fixes · P3+P5 + the 9.4s/4.0s catches · 07-20 PERFORMANCE-live + silent-cron bug + freeze root cause · SYMBOL build + R-series + dead-code sweep · trading-suite narratives cross-record · pill-narratives brief · Friday-backstop finding), plus a CHANGE_LIST bridging note (numbered items → dated briefs) and an Item-51 status append. Sourcing discipline: every fact from the board/briefs/mirror; the handful only the Dell's session memories hold are explicit <code>[DELL: fill/confirm]</code> markers — the Dell verifies each entry and marks anything unconfirmable UNVERIFIED rather than dropping it. Entries insert between June and the Dell's two existing 07-28 entries; 07-28 pill/gold work NOT duplicated. Side-flag raised: the Next-Up "Warm start" card may itself be stale (today's transcripts show the freshness-skip path live) — Dell to confirm ship state. Apply = append + cp to the local trading-src mirror byte-identical, code files untouched (a10c31d0/55ffd7f2/04b8e0cf).</p>
+                    <div class="card-tags"><span class="tag tag-infra">infra</span><span class="tag tag-decision">decision</span></div>
                 </div>
                 <div class="card">
                     <h3>Friday backtest backstop never fired — cron/nightly time collision (fix (b) briefed 07-28)</h3>
