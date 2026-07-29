@@ -34,7 +34,7 @@
             height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden;
         }
         .progress-fill {
-            height: 100%; width: 64%;
+            height: 100%; width: 66%;
             background: linear-gradient(90deg, #10b981, #60a5fa);
             border-radius: 5px;
         }
@@ -117,7 +117,7 @@
         <div class="progress-wrap">
             <div class="progress-label">
                 <span>Overall progress</span>
-                <span>37 of 58 items done</span>
+                <span>38 of 58 items done</span>
             </div>
             <div class="progress-bar"><div class="progress-fill"></div></div>
         </div>
@@ -223,12 +223,7 @@
             <div class="column col-progress">
                 <div class="column-header">
                     <span class="column-title">In Progress</span>
-                    <span class="count">5</span>
-                </div>
-                <div class="card">
-                    <h3>WATCH gold flip + draggable chart overlays (Item 46 unstalled) — briefed 07-28, awaiting Dell run</h3>
-                    <p>Two owner-ratified micro-changes, one Dell session (CODE_HANDOFF_pill_gold_chart_draggable_20260728; before-MD5 48e07b4b). (1) WATCH CARD → GOLD: Michael picked <code>#fff8e1</code> (the a3 screenshot) after the pill-card build proved white-on-white fails the dominant case — 86 of 87 scanned symbols are WATCH, so the default card vanished on the white container. One-value flip at line 815 <code>_PILL_TINT</code>. The mockup's white card was literally faithful but the mockup sat on a DARK ground; gold recovers the pop the mockup got for free. Deliberate asymmetry, do not "reconcile": SIGNALS WATCH row stays white (the list wants sparse BUY/ACT rows to pop; the card wants a badge). Accepted: WATCH now shares ACT's tint. (2) CHART "Best indicators (backtest)" BOX OBSCURES TOP-RIGHT PRICE ACTION — Michael's "thought this was addressed" memory verified correct-ish by the evidence sweep: it is <strong>Item 46, captured 2026-05-29</strong> (BLK example), but it was never shipped — it stalled at its own mandatory design-review gate (placement options a–d never chosen) queued behind Item 32, for 14 months. Gate RESOLVED by Michael 07-28: option (e), drag-and-drop. Fix: <code>ap.text</code> → <code>ap.annotate</code> + <code>.draggable(use_blit)</code> (mpl Text can't drag; Annotation/Legend can), EMA-legend <code>set_draggable</code> rider, optional in-session memory of the dragged position (render_chart's fig.clear() otherwise resets it). One shared <code>render_chart</code> + ONE call site (line 3534) → SYMBOL, 🧭 COMBINED, and the popup all covered by one edit. Item 46's acceptance carries over: TSLA + BLK right-edge candles/EMAs readable after the drag; box content byte-identical (the "0% (2 trades)" small-cell content deserves an n&lt;20 caveat someday — separate conversation). On landing: Item 46 → CLOSED in CHANGE_LIST.</p>
-                    <div class="card-tags"><span class="tag tag-swing">swing</span><span class="tag tag-decision">decision</span></div>
+                    <span class="count">4</span>
                 </div>
                 <div class="card">
                     <h3>Friday backtest backstop never fired — cron/nightly time collision (fix (b) briefed 07-28)</h3>
@@ -256,11 +251,16 @@
             <div class="column col-done">
                 <div class="column-header">
                     <span class="column-title">Done</span>
-                    <span class="count">37</span>
+                    <span class="count">38</span>
+                </div>
+                <div class="card">
+                    <h3>WATCH gold + draggable chart overlays — SHIPPED 07-28; Item 46 closed after 14 months (log entry pending)</h3>
+                    <p>One Dell session, both tasks (CODE_HANDOFF_pill_gold_chart_draggable_20260728). MD5 <strong>48e07b4b → a10c31d0</strong> (.bak _goldrag kept; golden 04b8e0cf + swing_core 55ffd7f2 untouched; mirror a10c31d0 verified from the cloud). (1) WATCH cards now GOLD <code>#fff8e1</code> in SYMBOL + 🧭 COMBINED, SIGNALS row deliberately still white — and the Dell caught a booby trap: the comment above <code>_PILL_TINT</code> read "Twins by intent — if one palette moves, move the other," which would have instructed a future session to undo the ratified asymmetry; rewritten to record the asymmetry as deliberate. (2) Item 46: box <code>ap.text→ap.annotate</code> + draggable(use_blit), EMA legend draggable, AND the session-memory rider — proven live: TSLA's box starts exactly on the last ~2 weeks of candles (the Item-46 complaint frame), drags clear, and BLK then re-renders with the box still where it was dropped. Gates all green: py_compile · selftest 3/3 · thread audit 0 · text= inventory identical · ui_stall 0 on 07-28 AND 07-29 · launch_first_beat 1.74s. THREE BRIEF CORRECTIONS from the run, all accepted: (a) "one edit covers three surfaces" was WRONG — COMBINED is built <code>with_chart=False</code> ("↳ full chart lives in the SYMBOL tab") and no chart popup exists; one call site = one surface (the gold pill verified in COMBINED regardless); (b) the brief's −0.2..1.2 axes-fraction sanity clamp silently rejected legitimate drags — the 5-panel gridspec leaves the price axes ~131px tall, so an ordinary downward drag lands at y≈−0.9 in axes terms; the Dell revalidated in FIGURE coordinates via transFigure (geometry-independent, survives future panel-ratio changes); (c) low drops clip by Z-ORDER (the price axes draws first, so lower panels paint over anything dragged beneath them), not blit artifacts — use_blit stays. RESIDUALS: Michael feel-tests a real mouse drag (Dell drove the acceptance through canvas.callbacks.process, so landing is proven but drag smoothness isn't; if laggy, drop use_blit=True at line 1315) · CHANGE_LIST Item 46 → CLOSED + MASTER_LOG entries still to be written on the Dell (docs weren't in the code brief's target scope — one small ask to that session) · EMA legend position deliberately NOT remembered across re-renders (only the box, as briefed). Ergonomics note: the box is ~6 text lines vs a 131px price panel — park it left/mid-panel; very low drops clip at the axes edge.</p>
+                    <div class="card-tags"><span class="tag tag-swing">swing</span></div>
                 </div>
                 <div class="card">
                     <h3>SYMBOL/COMBINED verdict pills restyled as cards — shipped 07-28</h3>
-                    <p>The "make the pills read as cards" complaint, closed on the Dell (CODE_HANDOFF_pill_card_styling_20260728; MD5 09e2c4d2 → 48e07b4b, .bak kept). WHAT LANDED: card border (bd=1 solid, the trade-card idiom), stripe 5→6px, verdict Helvetica 15→18 bold, and the tier wash — module-level <code>_PILL_TINT</code> + <code>_sig_tint()</code> reusing the SIGNALS row-tint hexes and exact tag precedence, applied configure-only at render (R2 zero-widgets-at-render contract holds); holding pill washes by P&amp;L sign; no-verdict/not-held → neutral. Registry sharing proved itself: SYMBOL and 🧭 COMBINED updated from the ONE edit, byte-identical screenshots. GATES ALL GREEN: py_compile · selftest-dedup 3/3 · thread audit zero violations · golden untouched (04b8e0cf) · ui_stall 0 · launch_first_beat 1.68s vs 1.74s pre-change · full text= literal inventory identical. RULED OUT with evidence: horizontal layout (in COMBINED's narrow column the holding pill is pushed fully off-screen and sentences clip mid-word — screenshots on file; vertical is FINAL) and rounded corners (tkinter frames are square — don't let anyone "fix" it later). Handoff item 6 (inline score in the pill) SKIPPED — contradicts the same brief's byte-identical-strings gate; needs an explicit gate relaxation to revisit. Process notes: the brief's frozen swing_core hash was stale (real baseline 55ffd7f2 since the 07-22 grading commit — Dell caught it, read-only so no harm); WATCH-white was implemented as briefed, then flagged as the weak case → gold ratified same day (see In Progress).</p>
+                    <p>The "make the pills read as cards" complaint, closed on the Dell (CODE_HANDOFF_pill_card_styling_20260728; MD5 09e2c4d2 → 48e07b4b, .bak kept). WHAT LANDED: card border (bd=1 solid, the trade-card idiom), stripe 5→6px, verdict Helvetica 15→18 bold, and the tier wash — module-level <code>_PILL_TINT</code> + <code>_sig_tint()</code> reusing the SIGNALS row-tint hexes and exact tag precedence, applied configure-only at render (R2 zero-widgets-at-render contract holds); holding pill washes by P&amp;L sign; no-verdict/not-held → neutral. Registry sharing proved itself: SYMBOL and 🧭 COMBINED updated from the ONE edit, byte-identical screenshots. GATES ALL GREEN: py_compile · selftest-dedup 3/3 · thread audit zero violations · golden untouched (04b8e0cf) · ui_stall 0 · launch_first_beat 1.68s vs 1.74s pre-change · full text= literal inventory identical. RULED OUT with evidence: horizontal layout (in COMBINED's narrow column the holding pill is pushed fully off-screen and sentences clip mid-word — screenshots on file; vertical is FINAL) and rounded corners (tkinter frames are square — don't let anyone "fix" it later). Handoff item 6 (inline score in the pill) SKIPPED — contradicts the same brief's byte-identical-strings gate; needs an explicit gate relaxation to revisit. Process notes: the brief's frozen swing_core hash was stale (real baseline 55ffd7f2 since the 07-22 grading commit — Dell caught it, read-only so no harm); WATCH-white was implemented as briefed, then flagged as the weak case → gold ratified same day and shipped in the follow-up run (card above).</p>
                     <div class="card-tags"><span class="tag tag-swing">swing</span></div>
                 </div>
                 <div class="card">
