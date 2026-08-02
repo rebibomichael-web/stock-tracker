@@ -208,6 +208,29 @@ NOT as a buy/sell condition. Caveat: volume-based attention is a proxy; the
 true flow driver is AUM x leverage^2 x move, and free AUM history does not
 exist — the r=+0.25 vol link would likely strengthen with AUM data.
 
+### Addendum: signed (buy-side vs sell-side) L-ETF volume
+
+Question: does heavy BUYING vs SELLING volume in the ETFs correlate forward?
+Daily volume is unsigned; proxy = day's L-ETF $vol intensity signed by the
+underlying's move direction. Linear correlation with fwd 5d: ~zero for all
+four fund sets (TSLA bulls +0.03, NVDA bulls -0.04, PLTU -0.02, TSLY +0.04).
+But the bucket asymmetry is consistent across all four:
+
+| set | HEAVY sell-side day fwd21 | HEAVY buy-side day fwd21 |
+|---|---|---|
+| TSLA (TSLL/TSLT/TSLR) | +5.40% | +2.93% |
+| NVDA (NVDL/NVDU/NVDX) | +7.10% (fwd5 +1.84%) | +5.21% (fwd5 +0.90%) |
+| PLTR (PLTU) | +5.60% (fwd5 +1.83%, n=14) | +4.55% (fwd5 +0.14%) |
+| TSLY (YieldMax, not leveraged) | +4.99% | +3.32% |
+
+Heavy-volume DOWN days in these products = capitulation/dip-buying flushes ->
+above-baseline forward returns (aligns with the bounce signature); heavy
+chase days mildly fade near-term (TSLA fwd5 only 40% positive). Weak but
+directionally consistent across four independent fund sets. Context/logging
+material, not a standalone condition. True NET flow (creations/redemptions)
+needs shares-outstanding history: not free (Yahoo fundamentals crumb-gated);
+issuers publish daily shares outstanding -> nightly logging would build it.
+
 ## Caveats
 
 - Proxy signature ≈ the real ~24-condition engine's dominant combo, not the
