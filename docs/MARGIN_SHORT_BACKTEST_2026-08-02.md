@@ -131,6 +131,54 @@ options open interest, single-stock leveraged ETF AUM (no clean free feed),
 securities-lending utilization (paid). Empirically the aggregate unwind
 expresses itself through high-beta growth names (tables above).
 
+## Leveraged ETFs & options as per-stock leverage gauges (same day)
+
+Companion script: `docs/letf_leverage.py`. Single-stock leveraged ETFs exist
+for 12+ watchlist names (TSLA and NVDA have five each, oldest from mid-2022);
+the index complex (TQQQ/SQQQ/SOXL/... 13 funds) trades back to 2006-2010.
+Gauge = L-ETF dollar volume / benchmark (SPY+QQQ+IWM) dollar volume, 21d
+smoothed, z-scored vs trailing 252d (point-in-time).
+
+**Key finding — it measures the opposite phase from margin debt.** Total
+L-ETF share YoY correlates NEGATIVELY with margin-debt YoY (peak r=-0.36 with
+ETF activity leading margin by ~1 month): leveraged-ETF activity (bull+bear
+funds together) spikes during volatility/deleveraging, just before/as margin
+debt rolls over. It is a fast daily stress gauge complementing the slow
+monthly leverage stock — not a duplicate of it.
+
+**Actionable for swing — the frenzy flag.** Bounce-signal outcomes by total
+L-ETF intensity z at signal (2011-2026):
+
+| z band | n | WR 7d | avg 7d | avg 21d |
+|---|---|---|---|---|
+| z < 0 | 659 | 56.6% | +1.09% | +3.07% |
+| 0–1 | 262 | 61.8% | +2.09% | +6.08% |
+| 1–2 | 186 | 59.1% | +1.92% | +1.62% |
+| **z >= 2 (frenzy)** | 201 | **47.3%** | **+0.62%** | +1.83% |
+
+At z>=2 the bounce edge collapses to a coin flip. Computable daily in real
+time from free Yahoo volume — unlike margin debt. Best new-input candidate so
+far. Bull-only and bull/bear-ratio variants tested: noisier, non-monotonic.
+No 12-month market-timing power in any variant (all bands +14-17% avg fwd
+12m, 2010-2026 secular bull) — margin YoY keeps the LEAP-horizon role.
+
+**Current readings (2026-07-31):** total L-ETF share 33% of benchmark $vol,
+z=+1.7 (elevated, below frenzy); bull/bear ratio 2.53 (z=+0.6). Per-stock
+leverage attention (L-ETF $vol / underlying $vol, 20d): PLTR 9.4% (z+1.2,
+rising — most levered name on the watchlist), TSLA 6.1% (falling), MU 3.7%
+(rising), NVDA 3.7% (falling), all others <2%. Per-stock signal overlays
+(2023+) have n<=15 per name — log nightly, let the profiler accumulate.
+
+**Options volume:** no free historical per-stock source exists (OCC endpoint
+404, Cboe put/call archives access-denied). Two viable paths: (a) log Yahoo
+option-chain snapshots (volume/OI/put-call per name) nightly — free, starts
+accruing history immediately; (b) Alpha Vantage HISTORICAL_OPTIONS (free key,
+25 req/day, daily chains back to ~2008) — backfilling only the ~550 historical
+signal dates would take ~22 days of quota and enable a proper options-volume
+overlay test. Mechanical effect note: leveraged funds rebalance in the
+direction of the day's move at each close (flow ~ AUM x leverage^2 x move), so
+late-day amplification concentrates in exactly the high-attention names above.
+
 ## Caveats
 
 - Proxy signature ≈ the real ~24-condition engine's dominant combo, not the
