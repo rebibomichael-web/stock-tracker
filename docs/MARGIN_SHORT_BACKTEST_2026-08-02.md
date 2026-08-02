@@ -179,6 +179,35 @@ overlay test. Mechanical effect note: leveraged funds rebalance in the
 direction of the day's move at each close (flow ~ AUM x leverage^2 x move), so
 late-day amplification concentrates in exactly the high-attention names above.
 
+## Per-name L-ETF correlations: TSLA / NVDA / PLTR (same day)
+
+Companion script: `docs/ss_letf_corr.py`. Daily-frequency tests (278-867 obs
+per name) of L-ETF attention (L-ETF $vol / underlying $vol, z vs trailing 6mo):
+
+- **Direction: no.** Attention z vs forward 1d/5d/21d returns: |r| <= 0.12,
+  signs inconsistent across names/horizons. Not a directional signal.
+- **Volatility: yes, on the name with the biggest complex.** TSLA attention z
+  vs forward 5d realized vol: **r = +0.25** (n=862). NVDA +0.03 (young
+  complex), PLTR -0.11 (short IPO-era sample).
+- **Close-rebalancing amplification is visible.** On big-move days (|ret|>=3%)
+  with HIGH attention, the move continues overnight: TSLA +0.45% avg
+  follow-through vs +0.21% low-attention; NVDA continuation rate 61% vs 48%.
+- **Attention spikes (z>=2) are melt-up markers, not sell signals**: positive
+  fwd 5d in all three names (TSLA +1.09% vs +0.55% baseline).
+- Bull-vs-bear-fund crowding ratios: no monotonic pattern; nothing scoreable.
+
+This reproduces the published findings: rebalancing flows (record ~$50B/day
+July 2026, 4x since January; Korean single-stock study attributes 8-14 vol
+points to Samsung/SK Hynix from these flows; Cheng & Madhavan 2009 and Tuzun
+2013 for the mechanism) affect VOLATILITY and the close/overnight, not
+multi-day direction — the flows are two-sided and pre-hedged by arbitrageurs.
+Kit implication: use per-name attention as a volatility-forecast input (ATR /
+expected-swing multiplier, esp. TSLA/PLTR) and for entry timing on
+high-attention names (rebalance sell pressure into the close of down days),
+NOT as a buy/sell condition. Caveat: volume-based attention is a proxy; the
+true flow driver is AUM x leverage^2 x move, and free AUM history does not
+exist — the r=+0.25 vol link would likely strengthen with AUM data.
+
 ## Caveats
 
 - Proxy signature ≈ the real ~24-condition engine's dominant combo, not the
