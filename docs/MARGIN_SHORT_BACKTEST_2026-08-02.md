@@ -87,6 +87,50 @@ means it is suggestive, not proven.
    indicator-profiler dimension and a scan display column; promote to a scored
    condition only if forward stats keep confirming the crowded-short tail.
 
+## Deep dive (same day): episodes, streak age, deceleration, sectors, per-stock
+
+Companion script: `docs/margin_deep_dive.py`. Highlights (SPY = S&P 500 proxy;
+all signals publication-lagged):
+
+**Episodes (YoY ≥ 40%).** Sustained episodes: 1999-10→2000-09 (peak 80%),
+2007-05→10 (peak 63%), 2021-01→10 (peak 72%), and 2026-04→ongoing (peak 54%
+so far). The market peak came 0 to +9 months AFTER the YoY peak (2000: same
+month; 2007: +2; 2021: +9), with 24-month drawdowns of −36%, −55%, −25%.
+Two single-month blips (1998, 2010) were base-effect artifacts and benign —
+duration matters, not just the print.
+
+**Streak age (is month 6 different from month 1?).** Yes:
+
+| streak age | n | fwd 3m avg | fwd 6m avg | fwd 12m avg (%pos) |
+|---|---|---|---|---|
+| months 1–3 | 17 | +1.0% | +1.4% | −6.4% (29%) |
+| months 4–6 | 7 | +2.0% | +2.5% | **−11.8% (0%)** |
+
+Near-term returns stay positive deep into an episode (melt-up), while the
+12-month outcome worsens with age. **Current streak: month 3** (Apr–Jun 2026).
+
+**Deceleration trigger.** First month YoY drops back below 40% after ≥2
+extreme months — fired 4× (Jun 2000, Nov 2000, Oct 2007, Aug 2021): fwd 12m
+avg −19.6%, 0% positive. Historically the cleanest "top is in" margin signal.
+Next test: July 2026 print, due ~Aug 20.
+
+**Sectors (fwd 12m in extreme months vs all other months — "froth drag").**
+Comm Svcs −46pp, Nasdaq-100 −40pp, Semis −39pp, Tech −38pp, Small caps −24pp,
+S&P −20pp, **Transports −17pp (mid-pack)**, Industrials −16pp, Financials
+−13pp, Staples +1pp, Utilities +2pp, **Energy +14pp** (late-cycle commodity
+strength). The unwind concentrates precisely where leveraged growth money
+lives; defensives are immune and energy historically benefited.
+
+**Per-stock froth drag (fwd 12m extreme vs other).** Negative for all 16
+tested — CRWD −91pp, META −87pp, TSLA −76pp … DE −18pp (least). Recent IPOs'
+samples are dominated by the single 2021 episode; treat rank, not magnitude.
+
+**Per-stock margin data does not exist publicly** — FINRA publishes only the
+aggregate. Closest per-stock leverage lenses: days-to-cover (in kit),
+options open interest, single-stock leveraged ETF AUM (no clean free feed),
+securities-lending utilization (paid). Empirically the aggregate unwind
+expresses itself through high-beta growth names (tables above).
+
 ## Caveats
 
 - Proxy signature ≈ the real ~24-condition engine's dominant combo, not the
