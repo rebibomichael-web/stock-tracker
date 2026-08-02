@@ -40,6 +40,11 @@ roadmap item there. Two loosely-coupled subprojects live here:
   `~/trading-src/journal`), so it **cannot run fully from a clone** — in
   sessions use `--selftest` (pure-function tests) or `--offline`.
   `journal_data.js` is generated output, not source.
+- **`leverage_monitor.py`** — margin-debt LEAP-sizing dimmer, L-ETF frenzy
+  flag (swing veto), and nightly leverage logger; wired into `app.py`
+  (`/api/leverage`). Backtest basis and integration guide in
+  `docs/MARGIN_SHORT_BACKTEST_2026-08-02.md`, `docs/STEELMAN_2026-08-02.md`,
+  `docs/LEVERAGE_INTEGRATION.md`. `--selftest` is network-free.
 - **`docs/SWING_AUDIT_2026-07-06.md`** — cross-repo audit spanning
   trading-src, trading-data, and this repo; good orientation for swing work.
 - **`mockups/`** — six frozen historical design mockups; never edit.
