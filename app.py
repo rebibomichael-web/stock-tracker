@@ -7,6 +7,11 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
+try:
+    import leverage_monitor
+except Exception:
+    leverage_monitor = None
+
 app = Flask(__name__)
 
 TICKERS = ['CRWD', 'ORCL', 'SNOW', 'SSYS', 'LMND', 'PLTR', 'BMNR', 'TSLA', 'NVDA', 'GRNY', 'DE', 'MU', 'NVMI', 'SOFI', 'HOOD', 'NOW']
@@ -14,8 +19,10 @@ TICKERS = ['CRWD', 'ORCL', 'SNOW', 'SSYS', 'LMND', 'PLTR', 'BMNR', 'TSLA', 'NVDA
 cache = {
     'tracker': [],
     'leap': [],
+    'leverage': None,
     'tracker_updated': None,
     'leap_updated': None,
+    'leverage_updated': None,
     'leap_loading': False
 }
 
@@ -284,10 +291,25 @@ def refresh_leap():
     cache['leap_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cache['leap_loading'] = False
 
+def refresh_leverage():
+    """Margin dimmer + L-ETF frenzy flag (leverage_monitor). Failures are
+    swallowed — the tracker must never depend on this."""
+    if leverage_monitor is None:
+        return
+    try:
+        regime = leverage_monitor.regime_state()
+        margin = leverage_monitor.margin_state(regime)
+        frenzy = leverage_monitor.frenzy_state(regime)
+        cache['leverage'] = {'regime': regime, 'margin': margin, 'frenzy': frenzy}
+        cache['leverage_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        print(f"Leverage monitor error: {e}")
+
 def background_refresh():
     while True:
         refresh_tracker()
         refresh_leap()
+        refresh_leverage()
         time.sleep(1800)
 
 # ─── ROUTES ───────────────────────────────────────────────────────────
@@ -304,6 +326,10 @@ def api_leap():
 def api_refresh_leap():
     threading.Thread(target=refresh_leap, daemon=True).start()
     return jsonify({'status': 'refreshing'})
+
+@app.route('/api/leverage')
+def api_leverage():
+    return jsonify({'data': cache['leverage'], 'updated': cache['leverage_updated']})
 
 HTML = '''<!DOCTYPE html>
 <html lang="en">
@@ -358,6 +384,7 @@ HTML = '''<!DOCTYPE html>
   </div>
   <span class="status" id="status">Loading...</span>
 </header>
+<div class="alert-bar" id="lev-bar" style="min-height:0;padding:5px 16px;font-size:11px;color:#A0C4FF;display:none"></div>
 
 <!-- TRACKER PANEL -->
 <div class="panel active" id="panel-tracker">
@@ -399,6 +426,27 @@ HTML = '''<!DOCTYPE html>
 
 <script>
 let leapData = [];
+let levState = null;
+
+function loadLeverage() {
+  fetch('/api/leverage').then(r => r.json()).then(d => {
+    if (!d.data) return;
+    levState = d.data;
+    const m = d.data.margin, f = d.data.frenzy;
+    let parts = ['⚖️ LEVERAGE — regime ' + d.data.regime];
+    if (m) {
+      parts.push(`margin YoY ${(m.yoy*100).toFixed(1)}% (streak ${m.streak}mo${m.decel ? ', DECELERATION' : ''})`);
+      if (m.leap_multiplier < 1) parts.push(`<b style="color:#ffd93d">LEAP sizing ×${m.leap_multiplier}</b>`);
+    }
+    if (f && f.z != null) {
+      parts.push(`L-ETF z ${f.z > 0 ? '+' : ''}${f.z}`);
+      if (f.veto) parts.push('<b style="color:#ff6b6b">FRENZY VETO — bounce setups unreliable</b>');
+    }
+    const bar = document.getElementById('lev-bar');
+    bar.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+    bar.style.display = 'block';
+  }).catch(() => {});
+}
 
 function showTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -533,6 +581,9 @@ function showLeapDetail(idx) {
   txt += `    S2/S3 Level:     ${bd['S2/S3 Level'] || 0}/3\\n`;
   txt += `    ${'─'.repeat(20)}\\n`;
   txt += `    TOTAL:           ${r.score}/15   ${r.signal}\\n`;
+  if (levState && levState.margin && levState.margin.leap_multiplier < 1) {
+    txt += `    SIZING:          ×${levState.margin.leap_multiplier}  (margin-debt ${levState.margin.decel ? 'deceleration' : 'froth'} — see docs/MARGIN_SHORT_BACKTEST)\\n`;
+  }
   txt += `${'─'.repeat(55)}`;
   document.getElementById('leap-detail').textContent = txt;
 }
@@ -545,9 +596,11 @@ function refreshLeap() {
 // Initial load
 loadTracker();
 loadLeap();
+loadLeverage();
+setTimeout(loadLeverage, 60000);  // retry once after first background pass
 
 // Auto refresh every 30 min
-setInterval(() => { loadTracker(); loadLeap(); }, 1800000);
+setInterval(() => { loadTracker(); loadLeap(); loadLeverage(); }, 1800000);
 </script>
 </body>
 </html>'''
