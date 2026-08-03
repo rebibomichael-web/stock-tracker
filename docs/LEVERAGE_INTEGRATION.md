@@ -14,11 +14,12 @@ unchanged** — the dimmer is explicit sizing guidance (×0.75 while margin YoY
 
 **STATUS 2026-08-03: applied** (local Dell session) — GUI scan paths wired at
 swing_trader.py:3872/:4342 (post-patch line numbers differ), scan-header
-readout added, golden tests green, module added to the sync list. NOT yet
-wired: `swing_headless_scan.py` (its own score_and_assign call, ~line 181) —
-the nightly cron close scan scores without the flag until that decision is
-made. Two corrections discovered during install are folded into the sections
-below (cron timezone, interpreter).
+readout added, golden tests green, module added to the sync list. Same day,
+`swing_headless_scan.py` was wired too (fail-safe pattern, frenzy state in
+scan meta), so BOTH live scan paths carry the flag, and a "SCORING-INPUT
+BREAK — 2026-08-03" section was added to ROADMAP_swing_trader.md next to the
+07-15 regime break. Two corrections discovered during install are folded
+into the sections below (cron timezone, interpreter).
 
 This repo is the canonical home of the module (trading-src is a mirror —
 GitHub edits get overwritten). Copy `leverage_monitor.py` next to
