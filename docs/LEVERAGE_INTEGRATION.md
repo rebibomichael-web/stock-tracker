@@ -12,6 +12,14 @@ unchanged** — the dimmer is explicit sizing guidance (×0.75 while margin YoY
 
 ## To wire on the Dell (trading-src/swing_trader.py)
 
+**STATUS 2026-08-03: applied** (local Dell session) — GUI scan paths wired at
+swing_trader.py:3872/:4342 (post-patch line numbers differ), scan-header
+readout added, golden tests green, module added to the sync list. NOT yet
+wired: `swing_headless_scan.py` (its own score_and_assign call, ~line 181) —
+the nightly cron close scan scores without the flag until that decision is
+made. Two corrections discovered during install are folded into the sections
+below (cron timezone, interpreter).
+
 This repo is the canonical home of the module (trading-src is a mirror —
 GitHub edits get overwritten). Copy `leverage_monitor.py` next to
 swing_trader.py, or import from a clone of this repo. Then, in the scan
@@ -38,8 +46,14 @@ breadth-penalty line.
 
 ## Nightly logging (Dell cron)
 
+Cron runs in the box's LOCAL timezone — schedule the run just AFTER the US
+close in that box's local time. On the Dell (Israel, cron in local time)
+that is 23:55 local = 16:55 ET, NOT `55 20` (which would be mid-session).
+Use an interpreter that actually has `openpyxl` + `requests` — on the Dell
+that is `/usr/bin/python3` (the stock-tracker-env venv lacks openpyxl):
+
 ```
-55 20 * * 1-5  cd ~/stock-tracker && python3 leverage_monitor.py --nightly
+55 23 * * 1-5  cd ~/Desktop/swing_project && /usr/bin/python3 leverage_monitor.py --nightly >> ~/leverage_monitor_cron.log 2>&1
 ```
 
 Appends one JSON line per weekday to `~/.michael_leverage_log.jsonl`:
