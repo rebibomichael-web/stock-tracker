@@ -59,3 +59,22 @@ Approval path: Michael approves alongside the M2 report + the M3 ledger amendmen
 | B6 | (found while running B5) market-regime gap on SIGNALS: normal 67.3%/+3.58 vs bull 52.6%/+0.17 — but M2 called the same gap "noise" on TRADES | — | cross-population discrepancy → M3 branch |
 
 **Format question ("create a format to be populated, or let data determine?") — BOTH, in that order:** the branch table above is the FORMAT (pre-registered rows, populated every run — that is the discipline that stops dredging); each run may APPEND data-discovered candidate rows, which are not graded in the run that found them — they become pre-registered for the NEXT run. Questions get the same Suspected→Proven ledger treatment as hypotheses.
+
+---
+
+# Part 4 — B4 DEEP-DIG (Michael 08-05: "dig deep — maybe an opposite indicator; consider for sell signals too")
+All close-era (post-07-16), in-sample, **Suspected**. ~9 independent formation dates — treat every number as provisional.
+
+| Cut | Result |
+|---|---|
+| Horizon sweep (low≤40 minus high≥61, raw) | fwd1 +0.41pp · **fwd3 +2.35pp · fwd5 +1.83pp** · fwd8 +0.13pp — a 3–5-day mean-reversion effect that decays |
+| Market-adjusted (excess vs same-day universe) | high side robust: 61–80 −1.10pp, 81–100 −1.07pp. Low side NON-monotonic: 21–40 +0.97pp, ≤10 +2.35pp (n=69), **but 11–20 −1.97pp (n=89)** — a shelf that breaks clean monotonic contrarianism |
+| Per-date consistency | spread positive on **6/9** formation dates (worst −2.83pp) — not a one-day artifact, not ironclad |
+| **Transitions (the opposite-indicator verdict)** | It is a STATE effect more than a flip effect: **stable synth-Buy is the worst state on the board (−1.42pp excess, 39% up-rate, n=288)**; stable Sell +0.60pp (n=345); fresh downgrade→Sell +1.24pp (n=110); fresh upgrade→Buy −0.33pp (n=99) |
+| Sub-indicator anatomy | INCONCLUSIVE from data — detail tokens nearly constant in-window (oscillators uniform; B/N encoding ambiguous); needs the synth generator source (Dell) |
+| Our buys × synth | fired-while-synth≤40: 75.6% WR7 / +3.97% (n=41) vs fair close-era baseline 69.6% / +3.16% (n=56) — modest lift; the system already self-selects into hated names (only 2 close-era signals fired at synth≥61) → entry gate ≈ redundant; the SELL side is where the value is |
+
+## Proposed pre-registrations → fold into the Aug-18 synth confirmation (join C1–C3)
+- **C4 — contrarian cross-section:** on data generated AFTER 2026-08-05, market-adjusted low(≤40)-minus-high(≥61) fwd5 spread. CONFIRM if pooled ≥ +1.0pp AND positive on ≥60% of formation dates. Also grade the 11–20 shelf: real or noise.
+- **C5 — synth-state-as-exit ("euphoria headwind"):** stable-synth-Buy state (≥2 consecutive Buy days) excess fwd5 ≤ −0.5pp on fresh data. If C4+C5 both confirm → **DISPLAY-ONLY** badge on the SYMBOL holding pill ("consensus euphoric — historically a 5-day headwind") + sell-context line in DIAGNOSE. Any use beyond display (exit rules, sizing) needs separate out-of-sample validation + ratification — standing no-wiring discipline.
+- **Instrumentation rider (→ M2-aftermath Dell bundle):** log synth pct + signal state at SIGNAL time and at EXIT time on every trade/signal record, so S9/M3 can grade synth-as-exit on realized trades instead of state proxies.
