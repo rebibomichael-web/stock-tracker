@@ -45,3 +45,17 @@ Add to STANDING_ANALYSIS_SPEC (as amendment 2, alongside the pending ledger amen
 4. **Registry stamping** (Part 1) is a numbered step of the protocol — after the ledger update, before the footer.
 
 Approval path: Michael approves alongside the M2 report + the M3 ledger amendment (one sitting, three approvals). Then a Dell brief implements Part 1's registry + banner consumer; the spec amendments are doc edits.
+
+---
+
+# Part 3 — SEEDED BRANCH TABLE (Michael, 2026-08-05, verbatim list) + answers-now status
+| # | Michael's question | Ran now (cloud, backups) | Standing module / needs |
+|---|---|---|---|
+| B1 | Repeat buy signals — triggered before, multiple times | ✅ 0-prior 57.6% vs 3+-prior 71.4% WR7 (n=118/49) — corroborates S2 on the tracker population | fold into S2; bucket 1–2 prior needs n |
+| B2 | Speed exits — "sold XOM +1.5% in a day; what if always ≤2d/+2%?" + all variables | ✅ take-profit grid run (1/1.5/2/3/5%): EVERY cap cuts per-trade return (2% cap: +1.69 vs +2.87 actual); realized ≤2d trades +3.94% n=10 | the "within-2-days" arm + per-DAY efficiency need daily paths → Dell bars cache, M3 module |
+| B3 | Every filter component alone + all combos (does RSI work? RSI+MA20?) | ✅ single-condition table + key pairs run (dedup, n≥20 rule) | standing per-milestone module: full pairwise matrix + top-k combos, era-adjusted |
+| B4 | Synthetic Barchart score correlation | ✅ close-era: r=−0.113; synth-Sell +1.59% vs synth-Buy −0.53% fwd5 — ANTI-correlation | exploratory only; the pre-registered Aug-18 C1–C3 confirmation stands untouched |
+| B5 | Score diff aggressive/normal/conservative | ⚠ unmeasurable yet: mode logged only since 07-17 (normal 73, aggressive 12, rest absent) | either deliberate mode A/B weeks or an offline reclassification study (Dell, scoring engine + bars) |
+| B6 | (found while running B5) market-regime gap on SIGNALS: normal 67.3%/+3.58 vs bull 52.6%/+0.17 — but M2 called the same gap "noise" on TRADES | — | cross-population discrepancy → M3 branch |
+
+**Format question ("create a format to be populated, or let data determine?") — BOTH, in that order:** the branch table above is the FORMAT (pre-registered rows, populated every run — that is the discipline that stops dredging); each run may APPEND data-discovered candidate rows, which are not graded in the run that found them — they become pre-registered for the NEXT run. Questions get the same Suspected→Proven ledger treatment as hypotheses.
