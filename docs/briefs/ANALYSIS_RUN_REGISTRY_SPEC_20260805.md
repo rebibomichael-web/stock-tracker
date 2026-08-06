@@ -155,3 +155,23 @@ Two real, complementary leads: more setup conditions firing → shallower drawdo
 **Overlap flag:** `entry_move_speed` is the same field M1/M2's hypothesis #3 tested against trade *outcome* (pl_pct) and found NOT CONFIRMED out-of-sample. This tests it against *move magnitude* (MFE) instead — a different target — so it is not the same disproven claim resurfacing, but it inherits the same discipline: needs its own OOS test before being trusted.
 
 **Proposal for M3:** a two-piece Swing% — ATR sizes the target as today, entry_n_conditions sizes the downside/stop side — pre-registered, tested out-of-sample, not touching anything live until it earns it.
+
+---
+
+# Part 7 — "let the data determine the parameters" (Michael 08-05, round 4)
+Structural critique, correctly aimed: every timing choice in this week's work — my own repeat-fire windows (30/60/90/180d), the velocity checkpoints (7/14/21d), and the live system's fixed 21-bar time-stop — was a calendar number picked in advance, never one the data was allowed to choose. Two separate fixes, traced to source.
+
+## Fix 1 — methodology: search-then-confirm, not hand-pick
+Demonstrated on the repeat-fire finding. Ran a real best-split search (every candidate cutoff, min n=20/side, pick the widest win-rate gap) instead of the hand-picked "5+ prior fires" bucket from Part 5:
+
+- **Count of prior fires:** search finds **7+** (n=24, 79.2% WR vs 57.4% below, +21.8pp gap) beats the hand-picked 5+ (+15pp gap) — the data found a sharper, better-separated line than I guessed.
+- **A dimension nobody had tried — recency, not just count:** best split on *days since the most-recent prior fire* (signals with ≥1 prior fire in trailing 365d, n=82): **≤42 days → 70.8% WR (n=48)** vs **>42 days → 52.9% WR (n=34)**, +17.9pp gap. New finding, only surfaced by letting the search run instead of assuming a window.
+
+**Mandatory honesty flag:** a search over many candidate cutoffs will find an impressive-looking split even in pure noise — this is a real overfitting/multiple-comparisons risk, not a formality. Neither 7+ nor 42 days is adopted from this run. Both are pre-registered into the M3 branch table as specific values requiring out-of-sample confirmation, same discipline as every hypothesis in the ledger.
+
+**Standing rule, not a one-off fix:** every future module needing a threshold or window (this spec's Part 2 already requires branch tables + curiosity sections; this adds the missing piece) defaults to search-then-confirm — propose via best-split search over a pre-registered candidate range, report the found value explicitly, require it to survive its own out-of-sample test before being trusted. Applies retroactively as a lens on the live system too: the 21-bar time-stop is itself a hand-picked calendar constant nobody has swept for an optimal value (M2 already showed removing it entirely is worse — weak evidence 21 is roughly reasonable — but nobody has searched for whether 18 or 25 would beat it). Carded as an M3-candidate horizon-optimization module, not touched now.
+
+## Fix 2 — logging: the daily data already exists, unused
+Traced `SignalTracker.check_outcomes()` (swing_core.py:664): it polls a single live quote at exactly 3 fixed elapsed-day thresholds (7/14/21) — three dots, no path. Separately, `ohlcv_cache.py` already maintains a persistent **daily** OHLCV parquet cache per ticker (~400 days back, used for backtesting) that has never been joined to the signal log. Every "needs daily bars, needs the Dell" caveat in this week's work exists only because that join has never been built — not because daily data doesn't exist.
+
+**Fix delivered as CODE_HANDOFF_daily_outcome_path_20260805:** additive `outcomes["daily_path"]` field, populated by reading the already-cached daily bars (zero new network calls) when a signal is graded. Once shipped, the velocity, repeat-fire-recency, and Swing%-accuracy questions all move from checkpoint-limited proxies to direct measurement on a re-run — no further instrumentation needed.
