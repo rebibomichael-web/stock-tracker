@@ -121,3 +121,37 @@ Confirmed from source (`swing_core.py`/`data_layer.py`): **Swing% = 2.0 × ATR /
 
 ## Standing-module implications (→ M3 branch table)
 Add rows: velocity-bucketed exit study (needs Dell daily bars — flagged, not yet buildable from cloud backups alone); repeat-fire matrix as a standing per-milestone cut (0/1/2/3–4/5+ × 30/60/90/180d); Swing%-band reconciliation (does the predicted-vs-realized relationship hold OOS at M3, and does it differ by regime).
+
+---
+
+# Part 6 — Capital velocity + Swing% ingredients (Michael 08-05, round 3)
+Two more asks: "capital can be redeployed at a faster rate earning more %" (challenging the velocity panel's raw-total framing) and "what other metrics are used for Swing% — there's def tech indicators, let's discuss." All in-sample, close-era/checkpoint-limited, **Suspected**.
+
+## Capital-velocity-adjusted redeployment test
+Fair pushback on Part 5's "+2.00% vs +10.16%" framing — it compared totals, not the rate of return on capital actually deployed. Re-ran as a real two-trade sequence: take the threshold at day 7, redeploy into the population's own average 14-day signal (+2.90%, its real observed rate — not a cherry-picked number) for the remaining 14 days, compare against riding the original position to day 21.
+
+| Threshold | n | Ride total (rate) | Take + redeploy total (rate) | Winner |
+|---|---|---|---|---|
+| +1% | 91 | +8.90% (42.4bp/d) | +3.90% (18.6bp/d) | RIDE |
+| +2% | 76 | +10.16% (48.4bp/d) | +4.90% (23.4bp/d) | RIDE |
+| +3% | 69 | +10.86% (51.7bp/d) | +5.90% (28.1bp/d) | RIDE |
+| +4% | 59 | +12.20% (58.1bp/d) | +6.90% (32.9bp/d) | RIDE |
+| +5% | 48 | +13.75% (65.5bp/d) | +7.90% (37.6bp/d) | RIDE |
+
+Riding wins on a **per-day-of-capital** basis too, at every threshold tested, and the margin *widens* as the threshold rises — the fast mover isn't just bigger, it's compounding faster than an average redeploy. Even the generous best-case (always finding another fast +2%-in-7d signal to redeploy into, back to back) only reaches +6.00%, still under riding's +10.16%.
+**Caveat surfaced, not resolved:** this whole framing assumes capital is genuinely constrained (one slot, no spare cash to open a new position without closing an old one). If that's not how Michael actually trades, the redeployment question doesn't apply and riding wins with no tradeoff to weigh — worth asking directly rather than assumed either way.
+
+## Swing% ingredients — does anything beat pure ATR?
+Confirmed again from source: zero technical indicators in Swing% today. Tested three already-logged technical fields against it as candidate improvements (n=125, in-sample):
+
+| Signal | r vs. realized MFE (upside) | r vs. realized \|MAE\| (downside) |
+|---|---|---|
+| ATR alone (today's Swing%) | +0.565 | +0.197 |
+| entry_n_conditions (setup strength) | +0.063 (no help) | **−0.287 (real help)** |
+| entry_move_speed (pre-entry momentum, %/bar) | **−0.402 (real help)** | +0.072 (no help) |
+| naive ATR × (1 + n_conditions/10) blend | +0.553 (slightly worse) | — |
+
+Two real, complementary leads: more setup conditions firing → shallower drawdown (a candidate downside-sizer, where ATR is weakest); faster/harder pre-entry fall → bigger eventual bounce (a candidate upside-sizer, independent of ATR). A naive multiplicative blend of ATR and condition-count did *not* improve on ATR alone — averaging them in isn't the way; any real combination needs its own out-of-sample test. Regime split (normal 0.61, bull 0.59) shows ATR's accuracy is stable across modes, so this isn't a regime-conditional gap.
+**Overlap flag:** `entry_move_speed` is the same field M1/M2's hypothesis #3 tested against trade *outcome* (pl_pct) and found NOT CONFIRMED out-of-sample. This tests it against *move magnitude* (MFE) instead — a different target — so it is not the same disproven claim resurfacing, but it inherits the same discipline: needs its own OOS test before being trusted.
+
+**Proposal for M3:** a two-piece Swing% — ATR sizes the target as today, entry_n_conditions sizes the downside/stop side — pre-registered, tested out-of-sample, not touching anything live until it earns it.
