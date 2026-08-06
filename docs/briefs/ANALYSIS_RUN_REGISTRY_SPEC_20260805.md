@@ -175,3 +175,36 @@ Demonstrated on the repeat-fire finding. Ran a real best-split search (every can
 Traced `SignalTracker.check_outcomes()` (swing_core.py:664): it polls a single live quote at exactly 3 fixed elapsed-day thresholds (7/14/21) — three dots, no path. Separately, `ohlcv_cache.py` already maintains a persistent **daily** OHLCV parquet cache per ticker (~400 days back, used for backtesting) that has never been joined to the signal log. Every "needs daily bars, needs the Dell" caveat in this week's work exists only because that join has never been built — not because daily data doesn't exist.
 
 **Fix delivered as CODE_HANDOFF_daily_outcome_path_20260805:** additive `outcomes["daily_path"]` field, populated by reading the already-cached daily bars (zero new network calls) when a signal is graded. Once shipped, the velocity, repeat-fire-recency, and Swing%-accuracy questions all move from checkpoint-limited proxies to direct measurement on a re-run — no further instrumentation needed.
+
+---
+
+# Part 8 — PARAMETER AUDIT (Michael 08-05, round 5): "all dates and all parameters should be dictated by data not preset"
+Michael's structural critique, applied to the 08-05 analyses themselves. Every hand-picked cutoff was swept; every search-derived split was permutation-tested (shuffle outcomes, re-run the identical search, count how often noise produces a result that good). **Six findings retracted, two reversed against my original direction, four survived and are now stronger.**
+
+## RETRACTED
+| Finding | Verdict | Evidence |
+|---|---|---|
+| "Fast start = MORE room to run" | **RETRACTED — mechanical** | Fast bucket's day-21 edge +12.47pp, of which +13.23pp was already banked at day 7. Incremental day7→day21: fast **+0.70%** vs rest **+1.45%**. Negative edge at every threshold +0.5% to +6%. Michael's original instinct (fast gain = less room left) is what the incremental numbers actually show. |
+| "Riding beats taking early" | **REVERSED** | The comparison was rigged: it pitted riding against "take +2%" when the fast bucket was up **+9.47%** at day 7. Corrected (bank the real day-7 amount, redeploy 14d at the population's own +2.90%): take+redeploy **+12.37%** vs ride **+10.16%** — take+redeploy wins by ~2.2pp at T=+1/2/3/5%. |
+| Synth "11–20 shelf" (−1.97pp) | **RETRACTED — banding artifact** | Vanishes under deciles (0–14: +0.49pp; 14–21: +0.93pp) and every rolling window and alternate scheme. Created by my band edges. |
+| "7+ prior fires" split | **RETRACTED** | Permutation p=**0.068** (2000 shuffles; null median gap 11.9pp, 95th pct 22.7pp vs observed 21.8pp). |
+| "42-day recency" split | **RETRACTED** | Permutation p=**0.626** — noise beats it more often than not (null median 20.1pp vs observed 17.9pp). |
+| Filter-condition table ("dislocation adds, confirmation subtracts") | **RETRACTED** | 20 conditions tested simultaneously; observed max deviation from baseline 14.6pp vs null median **14.9pp**, p=**0.607**. The entire table is indistinguishable from chance. |
+
+## SURVIVED (stronger than before — robust across the whole sweep, not one setting)
+| Finding | Robustness evidence |
+|---|---|
+| Repeat-firing stocks win more (0 vs 5+ prior) | Positive at **every** dedup window: none +8.5pp, 5d +9.0, 10d +12.2, 14d +16.8, 21d +13.8, 30d +12.4, 45d +22.4. Direction solid; magnitude varies 3× so quote the range, never the point estimate. |
+| Consensus-loved stocks lag (synth high side) | Negative in every binning: deciles 7–10 all negative (−0.66/−0.99/−1.53/−1.00pp); every rolling window ≥45; every alternate scheme. This was always the real finding — the low side is the fragile half. |
+| No forced take-profit beats as-traded | Continuous sweep, 60 caps from +0.25% to +15%: best (+13%) yields +2.76% vs as-traded **+2.87%**. Nothing beats it anywhere on the curve. |
+| Michael's quick trades outperform | Was n=10, unreportable. Widen the definition: ≤4d n=21 +3.42%/81%; **≤5d n=27 +4.24%/85%** vs rest +2.49%; ≤7d n=39 +4.16%/82%. Real at every reportable definition. |
+
+## Data-determined replacement values produced
+- **stop_m (live constant, never swept).** Coverage of realized excursions by multiplier: 1.5 → 56% MFE / 70% |MAE| (mean pred 6.78% vs realized MFE 7.03%); **2.0 → 78%/77%**; 2.5 → 87%/87%. Reading: **2.0 is well-calibrated as a risk bracket** (~77% containment) but **~1.5 is the honest TARGET estimate** (predicted ≈ realized MFE). This is the two-piece Swing% argument with numbers: one multiplier cannot serve both jobs.
+- **Dedup window.** No single correct value; report the finding's stability across 0–45d instead of picking one. Population size swings 792 → 129.
+
+## Standing rules added
+1. **Every threshold gets a sweep, and the sweep gets reported** — not the single best value. A finding is quoted as a range across reasonable parameter settings.
+2. **Every search-derived cutoff gets a permutation test before it is reported at all.** Three of this week's findings would never have reached Michael under this rule.
+3. **Every "X predicts Y" gets a mechanical-overlap check** — if X is partly contained in Y by construction (as arrival-speed is in cumulative return), report the incremental effect, not the total.
+4. **Multiple-comparison correction whenever >3 variants are tested** — the condition table failed exactly here.
