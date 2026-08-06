@@ -78,3 +78,46 @@ All close-era (post-07-16), in-sample, **Suspected**. ~9 independent formation d
 - **C4 — contrarian cross-section:** on data generated AFTER 2026-08-05, market-adjusted low(≤40)-minus-high(≥61) fwd5 spread. CONFIRM if pooled ≥ +1.0pp AND positive on ≥60% of formation dates. Also grade the 11–20 shelf: real or noise.
 - **C5 — synth-state-as-exit ("euphoria headwind"):** stable-synth-Buy state (≥2 consecutive Buy days) excess fwd5 ≤ −0.5pp on fresh data. If C4+C5 both confirm → **DISPLAY-ONLY** badge on the SYMBOL holding pill ("consensus euphoric — historically a 5-day headwind") + sell-context line in DIAGNOSE. Any use beyond display (exit rules, sizing) needs separate out-of-sample validation + ratification — standing no-wiring discipline.
 - **Instrumentation rider (→ M2-aftermath Dell bundle):** log synth pct + signal state at SIGNAL time and at EXIT time on every trade/signal record, so S9/M3 can grade synth-as-exit on realized trades instead of state proxies.
+
+---
+
+# Part 5 — VELOCITY / REPEAT-FIRE MATRIX / SWING% ACCURACY (Michael 08-05, round 2)
+Michael's exact asks: "look at speed of velocity eg getting 2% in 1 day good over 5 days not as much where is the line" · "'stocks keep firing' too vague — break it down: if stock fired x amount within x time, win% was x" · "look at the swing% prediction — how accurate." All in-sample, close-era/checkpoint-limited, **Suspected**.
+
+## Speed of arrival (proxy for velocity — see caveat)
+No daily-resolution price paths are cached anywhere in the backups (`trading-data`/`trading-src`) and this sandbox has no `yfinance` — so the true "+2% in 1 day vs 5 days" question needs the Dell's bars cache. Built the closest honest proxy from the 7d/14d/21d signal checkpoints: bucket by **how many days it took to first cross +2%**, then look at day-21 outcome.
+
+| Arrival speed | n | Day-21 avg | Day-21 win rate |
+|---|---|---|---|
+| Within 7 days | 76 | +10.16% | 82.9% |
+| By day 14 (not 7) | 28 | +5.40% | 89.3% |
+| By day 21 (not 14) | 9 | insufficient — monitoring | — |
+| Never by day 21 | 59 | −7.02% | 10.2% |
+
+**Finding is the OPPOSITE of the hypothesis:** fast arrival predicts MORE follow-through, not less. Taking +2% at day 7 instead of riding nets +2.00% guaranteed vs +10.16% average riding to day 21 (83% still positive). Same shape at +1%/+3% thresholds (see run output). Realized-trade cross-check (125 trades, pl_pct/hold_days): the 27 fastest movers (>1%/day) averaged +8.64% in 4.4 days — consistent but not independent (rate and outcome share sign by construction, so this check is directional support only, not confirmation).
+**Caveats, both real:** (1) checkpoint resolution is 7 days, not 1 day — the exact line Michael asked for needs daily bars, carded for M3/Dell; (2) correlational — signals that hit +2% fast may simply be stronger dislocations overall, not "fast" in a causally distinct sense. Composition vs. causation is unresolved.
+
+## Repeat-fire matrix (real breakdown, not a binary split)
+Win rate (7d) by **exact prior-fire count** within **four lookback windows**, at signal time:
+
+| Window | 0 prior | 1 | 2 | 3–4 | 5+ |
+|---|---|---|---|---|---|
+| 30d | 59% (n=161) | thin (n=6) | thin (n=5) | thin (n=6) | 67% (n=15, thin) |
+| 60d | 57% (n=127) | 50% (n=16, thin) | thin (n=11) | thin (n=8) | 71% (n=31) |
+| 90d | 58% (n=118) | thin (n=14) | thin (n=12) | thin (n=14) | 71% (n=35) |
+| 180d | 58% (n=111) | 38% (n=16, thin) | thin (n=11) | 72% (n=18) | 70% (n=37) |
+
+**The honest line:** only 0-vs-5+ is reportable at any window (n≥15 rule); the gap (~12–14pp) is stable across all four windows, so it's not a window-choice artifact. Buckets 1–4 are individually too thin everywhere — that IS the answer to "where's the line," not a gap to paper over.
+
+## Swing% accuracy
+Confirmed from source (`swing_core.py`/`data_layer.py`): **Swing% = 2.0 × ATR / price × 100** (`CFG.stop_m` default 2.0) — a volatility/stop-distance estimate, NOT a directional price-move prediction. Tested against realized MFE (best excursion) / |MAE| (worst) on all 125 trades with `entry_atr`.
+
+- r(predicted swing%, realized MFE) = **+0.565** (decent — predicts upside opportunity reasonably)
+- r(predicted swing%, realized |MAE|) = **+0.197** (weak — poor risk-sizing signal)
+- Predicted swing% covered the realized MFE 78% of the time, |MAE| 77% — behaves as a **ceiling estimate**, not a point forecast (mean predicted 9.05% vs mean realized MFE 7.03%, |MAE| 5.29%)
+- By band, bigger predicted swing → bigger realized move AND bigger trade result (moderate 5–7%: +1.72%/77%WR · wide 7–10%: +2.82%/80%WR · very wide >10%: +4.72%/71%WR) — win rate is non-monotonic; the widest band pays more per trade while winning slightly less often
+
+**Verdict:** the ruler points the right way for upside sizing, is weak for downside sizing, and runs mildly hot as an upper bound rather than a precise forecast.
+
+## Standing-module implications (→ M3 branch table)
+Add rows: velocity-bucketed exit study (needs Dell daily bars — flagged, not yet buildable from cloud backups alone); repeat-fire matrix as a standing per-milestone cut (0/1/2/3–4/5+ × 30/60/90/180d); Swing%-band reconciliation (does the predicted-vs-realized relationship hold OOS at M3, and does it differ by regime).
