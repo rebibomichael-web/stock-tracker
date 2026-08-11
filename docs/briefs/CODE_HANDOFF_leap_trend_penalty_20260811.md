@@ -323,19 +323,21 @@ you whether it beats noise.
 
 ---
 
-## 10. Open questions for Michael
+## 10. Decisions for Michael — AFTER Phase B, not before
 
-1. **Penalty or veto (M1 vs M2)?** Your wording had both. My read is you want a veto
-   for the extreme case (NKE) and a penalty for the middle (DIS) — but that is my
-   inference and it should be your call, ideally after seeing Phase B's numbers.
+**None of these block the build.** They are recorded here so Phase B measures what is
+needed to answer them, and so nobody resolves them silently by implementation.
+
+1. **Penalty or veto (M1 vs M2)?** His wording had both. My read is a veto for the
+   extreme case (NKE) and a penalty for the middle (DIS) — but that is inference, and
+   it should be his call once there are numbers.
 2. **Does "removed from contention" mean hidden from the scanner, or shown with the
-   signal suppressed?** These are different UI products. Given the existing air-gap
-   discipline (liquidity flags inform, never refuse), suppress-and-label is more
-   consistent with how this system already works.
-3. **Should the penalty apply to the ATH Drawdown pillar specifically** (conditioning
-   an existing pillar on direction — arguably the most honest fix, since that is where
-   the defect lives), **or as a separate 6th term?** Conditioning is cleaner; a
-   separate term is easier to test and reverse.
+   signal suppressed?** Different UI products. Given the existing air-gap discipline
+   (liquidity flags inform, never refuse), suppress-and-label is more consistent with
+   how this system already works.
+3. **Condition the ATH Drawdown pillar on direction, or add a separate 6th term?**
+   Conditioning is arguably the most honest fix since that is where the defect lives;
+   a separate term is easier to test and to reverse.
 
 ---
 
@@ -344,8 +346,13 @@ you whether it beats noise.
 - **III-5 (bottom-calling backtest, DESIGN-LOCKED, not built)** — same underlying
   question, far larger scope. This brief is a deliberate fast-track precursor: it
   answers "is the downtrend still active?" without building the full HELD/PARTIAL/BROKE
-  taxonomy. **If III-5's build is imminent, fold this in as its Stage 0.5 rather than
-  duplicating the data layer.** Confirm before starting.
+  taxonomy. **RESOLVED 2026-08-11 — III-5 is NOT imminent, so there is nothing to fold
+  into and no reason to wait.** Checked directly: the only related code is
+  `analysis/bottom_call.py` (87 lines, ad-hoc, last touched 2026-08-04), which is not
+  III-5 — it has no swing-low detection, no S1/S2/S3 pivot construction, no
+  SNATCH/DURABLE outcome layer and no staging. It does already fetch history for
+  score≥10 records, so **read it before writing Phase B's fetcher** — but treat it as
+  a starting point, not a dependency. Proceed.
 - **LM6 (drawdown-depth conditioning)** — the standing LEAP spec's active module on the
   *same variable*. The protocol review flagged LM6 as the sharpest omission from the §3
   conversion table, and warned this exact hypothesis risks living as both an
