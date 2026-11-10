@@ -126,8 +126,8 @@ def classify_action(action):
 
 
 def transfer_hint(action):
-    """Counterparty account from 'TRANSFERRED TO VS X17-212229-1 ...'
-    -> 'X172122291' (dashes stripped). None when absent."""
+    """Counterparty account from 'TRANSFERRED TO VS X00-000001-1 ...'
+    -> 'X000000011' (dashes stripped). None when absent."""
     m = re.search(r"\bVS\s+([A-Z0-9-]+)", str(action or "").upper())
     return m.group(1).replace("-", "") if m else None
 
@@ -799,12 +799,15 @@ def _tx(date, kind, sym, acct, qty, price=0.0, amount=0.0, hint=None,
 
 
 def selftest():
+    # Account ids in this fixture are placeholders (X00000001, X00000002,
+    # 000000003). The dashed counterparty form keeps the extra trailing
+    # digit so dash-stripping still prefixes the destination account.
     # 1. Multi-account aggregate with FIFO sell: basis of REMAINING shares.
     txns = [
-        _tx("2026-01-07", "BUY", "TSLA", "X17212229", 5, 435.25, -2176.25),
-        _tx("2026-01-07", "BUY", "TSLA", "X83768586", 1, 437.86, -437.86),
-        _tx("2026-01-20", "BUY", "TSLA", "235498151", 3, 427.21, -1281.63, name="ROTH IRA"),
-        _tx("2026-02-01", "SELL", "TSLA", "X17212229", -2, 500.00, 1000.00),
+        _tx("2026-01-07", "BUY", "TSLA", "X00000001", 5, 435.25, -2176.25),
+        _tx("2026-01-07", "BUY", "TSLA", "X00000002", 1, 437.86, -437.86),
+        _tx("2026-01-20", "BUY", "TSLA", "000000003", 3, 427.21, -1281.63, name="ROTH IRA"),
+        _tx("2026-02-01", "SELL", "TSLA", "X00000001", -2, 500.00, 1000.00),
     ]
     h = compute_holdings(txns, len(txns), 1)
     s = h["stocks"][0]
@@ -819,15 +822,15 @@ def selftest():
 
     # 2. Transfer moves basis + acquisition date across accounts; total flat.
     txns = [
-        _tx("2026-01-07", "BUY", "TSLA", "X83768586", 2, 400.00, -800.00),
-        _tx("2026-04-06", "TRANSFER", "TSLA", "X83768586", -1, hint="X172122291"),
-        _tx("2026-04-06", "TRANSFER", "TSLA", "X17212229", 1, amount=0.0),
+        _tx("2026-01-07", "BUY", "TSLA", "X00000002", 2, 400.00, -800.00),
+        _tx("2026-04-06", "TRANSFER", "TSLA", "X00000002", -1, hint="X000000011"),
+        _tx("2026-04-06", "TRANSFER", "TSLA", "X00000001", 1, amount=0.0),
     ]
     h = compute_holdings(txns, len(txns), 1)
     s = h["stocks"][0]
     assert abs(s["shares"] - 2) < 1e-9 and abs(s["basis"] - 800.00) < 0.01, s
     assert "flags" not in s, s
-    dst = [a for a in s["accounts"] if "2229" in a["a"]][0]
+    dst = [a for a in s["accounts"] if "0001" in a["a"]][0]
     assert abs(dst["basis"] - 400.00) < 0.01          # original basis carried
 
     # 2b. FIFO is by ACQUISITION DATE, not insertion: a transferred-in lot
@@ -851,7 +854,7 @@ def selftest():
     assert _txn_key(ta) != _txn_key(tb)
 
     # 3. Reinvestment adds fractional shares at |Amount| basis.
-    txns = [_tx("2026-03-31", "REINVEST", "PLTU", "X17212229", 0.114, 41.34, -4.71)]
+    txns = [_tx("2026-03-31", "REINVEST", "PLTU", "X00000001", 0.114, 41.34, -4.71)]
     h = compute_holdings(txns, 1, 1)
     s = h["stocks"][0]
     assert abs(s["shares"] - 0.114) < 1e-9 and abs(s["basis"] - 4.71) < 0.01
@@ -859,8 +862,8 @@ def selftest():
     # 4. Oversell (pre-window buy invisible) -> flagged, net count honest,
     #    and the row is self-describing about what basis/bps cover.
     txns = [
-        _tx("2026-02-01", "BUY", "NVDA", "235498151", 1, 100, -100, name="ROTH IRA"),
-        _tx("2026-02-10", "SELL", "NVDA", "235498151", -3, 110, 330, name="ROTH IRA"),
+        _tx("2026-02-01", "BUY", "NVDA", "000000003", 1, 100, -100, name="ROTH IRA"),
+        _tx("2026-02-10", "SELL", "NVDA", "000000003", -3, 110, 330, name="ROTH IRA"),
     ]
     h = compute_holdings(txns, 2, 1)
     s = h["stocks"][0]
@@ -871,22 +874,23 @@ def selftest():
     # 4b. Action classification is anchored — security NAMES containing
     #     SELL/BUY substrings must not flip the kind.
     assert classify_action("REINVESTMENT ISHARES RUSSELL 2000 ETF (IWM) (Cash)") == "REINVEST"
-    assert classify_action("TRANSFERRED FROM VS X17-212229-1 BEST BUY CO INC (BBY) (Cash)") == "TRANSFER"
+    assert classify_action("TRANSFERRED FROM VS X00-000001-1 BEST BUY CO INC (BBY) (Cash)") == "TRANSFER"
+    assert transfer_hint("TRANSFERRED TO VS X00-000001-1 BEST BUY CO INC (BBY) (Cash)") == "X000000011"
     assert classify_action("YOU SOLD BEST BUY CO INC (BBY) (Cash)") == "SELL"
     assert classify_action("YOU BOUGHT ASSIGNED PUTS AS OF 01/30/26 BITMINE (BMNR) (Cash)") == "BUY"
     assert classify_action("ASSIGNED as of Jan-30-2026 PUT (BMNR) ...") == "ASSIGN"
     assert classify_action("DIVIDEND RECEIVED NVIDIA CORPORATION COM (NVDA) (Cash)") is None
 
     # 5. Money market excluded by default, included with the flag.
-    txns = [_tx("2026-03-31", "REINVEST", "SPAXX", "X83768586", 0.25, 1, -0.25)]
+    txns = [_tx("2026-03-31", "REINVEST", "SPAXX", "X00000002", 0.25, 1, -0.25)]
     assert compute_holdings(txns, 1, 1)["stocks"] == []
     assert compute_holdings(txns, 1, 1, include_cash=True)["stocks"]
 
     # 6. Options tracked separately in contracts; short put closed by expiry.
     txns = [
-        _tx("2026-01-02", "SELL", "-BMNR260306P18", "X17212229", -1, 1.10, 109.35),
-        _tx("2026-03-09", "EXPIRE", "-BMNR260306P18", "X17212229", 1),
-        _tx("2026-04-06", "BUY", "-NOW280121C200", "X17212229", 1, 8.43, -843.67),
+        _tx("2026-01-02", "SELL", "-BMNR260306P18", "X00000001", -1, 1.10, 109.35),
+        _tx("2026-03-09", "EXPIRE", "-BMNR260306P18", "X00000001", 1),
+        _tx("2026-04-06", "BUY", "-NOW280121C200", "X00000001", 1, 8.43, -843.67),
     ]
     h = compute_holdings(txns, 3, 1)
     assert h["stocks"] == []
@@ -898,7 +902,7 @@ def selftest():
     # 6b. Assignment whose opening short predates the window: no phantom
     #     contract is fabricated, and the flag surfaces as a warning even
     #     though the book ends flat.
-    txns = [_tx("2026-02-02", "ASSIGN", "-BMNR260130P26", "X17212229", 1)]
+    txns = [_tx("2026-02-02", "ASSIGN", "-BMNR260130P26", "X00000001", 1)]
     h = compute_holdings(txns, 1, 1)
     opts = {o["t"]: o for o in h["options"]}
     row = opts.get("-BMNR260130P26")
@@ -906,14 +910,14 @@ def selftest():
     assert any("-BMNR260130P26" in w for w in h["warnings"]), h["warnings"]
 
     # 7. Unmatched transfer-in -> estimated basis from transfer-date value.
-    txns = [_tx("2026-04-09", "TRANSFER", "TSLA", "X17212229", 0.146, amount=50.46)]
+    txns = [_tx("2026-04-09", "TRANSFER", "TSLA", "X00000001", 0.146, amount=50.46)]
     h = compute_holdings(txns, 1, 1)
     s = h["stocks"][0]
     assert abs(s["shares"] - 0.146) < 1e-9 and abs(s["basis"] - 50.46) < 0.01
     assert any("estimated" in f for f in s["flags"]), s
 
     # 8. Max-multiplicity dedup: re-export collapses, real double-fill survives.
-    row = "01/07/2026,\"Joint WROS - TOD\",\"X17212229\",\"YOU BOUGHT TESLA INC COM (TSLA) (Margin)\",TSLA,\"TESLA INC COM\",Margin,0,,USD,435.25,1,0,,,,-435.25,01/08/2026"
+    row = "01/07/2026,\"Joint WROS - TOD\",\"X00000001\",\"YOU BOUGHT TESLA INC COM (TSLA) (Margin)\",TSLA,\"TESLA INC COM\",Margin,0,,USD,435.25,1,0,,,,-435.25,01/08/2026"
     hdr = ("Run Date,Account,Account Number,Action,Symbol,Description,Type,"
            "Exchange Quantity,Exchange Currency,Currency,Price,Quantity,"
            "Exchange Rate,Commission,Fees,Accrued Interest,Amount,Settlement Date")
@@ -932,8 +936,8 @@ def selftest():
 
         # 8b. Ticker/CUSIP flip across exports dedups to ONE fill (real case:
         #     HON vs 438516106, description gains a trailing ' 1').
-        hon_t = "06/16/2026,\"ROTH IRA\",\"235498151\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",HON,\"HONEYWELL INTERNATIONAL INC COM USD1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
-        hon_c = "06/16/2026,\"ROTH IRA\",\"235498151\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",438516106,\"HONEYWELL INTERNATIONAL INC COM USD1 1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
+        hon_t = "06/16/2026,\"ROTH IRA\",\"000000003\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",HON,\"HONEYWELL INTERNATIONAL INC COM USD1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
+        hon_c = "06/16/2026,\"ROTH IRA\",\"000000003\",\"YOU BOUGHT HONEYWELL INTERNATIONAL INC COM USD1 (HON) (Cash)\",438516106,\"HONEYWELL INTERNATIONAL INC COM USD1 1\",Cash,0,,USD,230.52,0.433,0,,,,-99.82,06/17/2026"
         p3 = os.path.join(td, "Accounts_History (2).csv")
         p4 = os.path.join(td, "Accounts_History (3).csv")
         with open(p3, "w", encoding="utf-8") as f:
@@ -966,13 +970,13 @@ def selftest():
             f.write(
                 "Account Number,Account Name,Symbol,Description,Quantity,"
                 "Last Price,Current Value,Cost Basis Total,Average Cost Basis,Type\n"
-                'X17212229,Joint WROS - TOD,TSLA,TESLA INC COM,80,$400.00,'
+                'X00000001,Joint WROS - TOD,TSLA,TESLA INC COM,80,$400.00,'
                 '"$32,000.00","$28,000.00",$350.00,Margin,\n'
-                "235498151,ROTH IRA,TSLA,TESLA INC COM,23,$400.00,"
+                "000000003,ROTH IRA,TSLA,TESLA INC COM,23,$400.00,"
                 '"$9,200.00","$8,100.00",$352.17,Cash,\n'
-                "X83768586,Joint WROS - TOD,SPAXX**,FIDELITY GOVT MONEY MARKET,"
+                "X00000002,Joint WROS - TOD,SPAXX**,FIDELITY GOVT MONEY MARKET,"
                 "512.05,$1.00,$512.05,--,--,Cash,\n"
-                "X17212229,Joint WROS - TOD,704916204,PEAKSOFT MULTINET CORP,"
+                "X00000001,Joint WROS - TOD,704916204,PEAKSOFT MULTINET CORP,"
                 "138,--,--,--,--,Cash,\n"
                 "Pending Activity,,,,,,$99.00,,,\n"
                 ',,,"The data and information in this spreadsheet",,,,,,\n'
@@ -984,7 +988,7 @@ def selftest():
         assert rows[3]["symbol"] == "704916204" and rows[3]["basis"] is None
 
         snap = {"asof": "2026-07-06", "file": os.path.basename(pp), "rows": rows}
-        txns = [_tx("2026-03-01", "BUY", "TSLA", "X17212229", 20, 400, -8000.00)]
+        txns = [_tx("2026-03-01", "BUY", "TSLA", "X00000001", 20, 400, -8000.00)]
         h = compute_holdings(txns, 1, 1, snapshot=snap)
         s = h["stocks"][0]
         assert s["t"] == "TSLA" and abs(s["shares"] - 103) < 1e-9, s
@@ -994,7 +998,7 @@ def selftest():
         assert not any("NOT included" in w for w in h["warnings"])
 
         # engine-only symbol (not in snapshot) is kept and flagged
-        txns.append(_tx("2026-07-01", "BUY", "MU", "X17212229", 2, 100, -200.00))
+        txns.append(_tx("2026-07-01", "BUY", "MU", "X00000001", 2, 100, -200.00))
         h = compute_holdings(txns, 2, 1, snapshot=snap)
         mu = [x for x in h["stocks"] if x["t"] == "MU"][0]
         assert abs(mu["shares"] - 2) < 1e-9
@@ -1020,11 +1024,11 @@ def selftest():
 
     # 9. Consistency: FIFO net equals the signed quantity sum per symbol.
     txns = [
-        _tx("2026-01-07", "BUY", "MU", "X17212229", 5, 100, -500),
-        _tx("2026-01-08", "SELL", "MU", "X17212229", -1.5, 110, 165),
-        _tx("2026-01-09", "TRANSFER", "MU", "X17212229", -2, hint="X837685861"),
-        _tx("2026-01-09", "TRANSFER", "MU", "X83768586", 2),
-        _tx("2026-01-10", "SELL", "MU", "X83768586", -0.5, 120, 60),
+        _tx("2026-01-07", "BUY", "MU", "X00000001", 5, 100, -500),
+        _tx("2026-01-08", "SELL", "MU", "X00000001", -1.5, 110, 165),
+        _tx("2026-01-09", "TRANSFER", "MU", "X00000001", -2, hint="X000000021"),
+        _tx("2026-01-09", "TRANSFER", "MU", "X00000002", 2),
+        _tx("2026-01-10", "SELL", "MU", "X00000002", -0.5, 120, 60),
     ]
     h = compute_holdings(txns, len(txns), 1)
     s = h["stocks"][0]
